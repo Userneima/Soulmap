@@ -1,0 +1,825 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="zh-CN"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>品运一家人 - Soulmap</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,typography"></script>
+<link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/icon?family=Material+Icons+Outlined" rel="stylesheet"/>
+<script>
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        primary: "#3B82F6",
+                        "background-light": "#F3F4F6",
+                        "background-dark": "#1A1A1A",
+                        "surface-dark": "#242424",
+                        "surface-dark-hover": "#333333",
+                        "border-dark": "#333333",
+                        "text-primary-dark": "#E5E5E5",
+                        "text-secondary-dark": "#A3A3A3"
+                    },
+                    fontFamily: {
+                        display: ["system-ui", "-apple-system", "BlinkMacSystemFont", "Segoe UI", "Roboto", "Helvetica Neue", "Arial", "sans-serif"],
+                    },
+                    borderRadius: {
+                        DEFAULT: "0.5rem",
+                        'lg': "0.75rem",
+                        'xl': "1rem",
+                        '2xl': "1.25rem",
+                    },
+                },
+            },
+        };
+    </script>
+<style>::-webkit-scrollbar {
+            width: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #4A4A4A;
+            border-radius: 3px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #666666;
+        }
+        body {
+            font-family: 'system-ui', sans-serif;
+        }
+        #message-popover {
+            transition: opacity 160ms ease, transform 160ms ease;
+        }
+        #channel-menu-popover {
+            transition: opacity 160ms ease, transform 160ms ease;
+        }
+        #tabs-filter-popover {
+            transition: opacity 140ms ease, transform 140ms ease;
+        }
+        #channel-top-inner,
+        #channel-hero,
+        #channel-hero-logo,
+        #channel-hero-title,
+        #channel-hero-meta,
+        #channel-hero-actions,
+        .hero-action-button,
+        .hero-decor,
+        #composer-collapsed,
+        #composer-expanded,
+        #channel-tabs-row,
+        #channel-tabs-rail,
+        #compact-compose-trigger,
+        #channel-sidebar-column,
+        #channel-sidebar-sticky,
+        #channel-sidebar-card {
+            transition:
+                opacity 220ms ease,
+                transform 220ms ease,
+                top 220ms ease,
+                max-height 220ms ease,
+                margin 220ms ease,
+                padding 220ms ease,
+                border-color 220ms ease,
+                background-color 220ms ease,
+                width 220ms ease,
+                height 220ms ease,
+                font-size 220ms ease,
+                border-radius 220ms ease;
+        }
+        body.channel-condensed #channel-top-region {
+            background: #1A1A1A;
+            backdrop-filter: none;
+        }
+        @media (min-width: 1280px) {
+            body.channel-condensed #channel-top-region {
+                background: linear-gradient(
+                    to right,
+                    #1A1A1A calc(100% - 19.5rem),
+                    transparent calc(100% - 19.5rem)
+                );
+            }
+        }
+        body.channel-condensed #channel-top-inner {
+            padding-bottom: 0.75rem;
+        }
+        body.channel-condensed #channel-hero {
+            margin-bottom: 1.5rem;
+            padding: 0.25rem 0;
+            border-color: transparent;
+            border-radius: 0;
+            background: transparent;
+        }
+        body.channel-condensed .hero-decor {
+            opacity: 0;
+        }
+        body.channel-condensed #channel-hero-logo {
+            width: 2.5rem;
+            height: 2.5rem;
+            padding: 0.125rem;
+            border-radius: 0.75rem;
+            box-shadow: none;
+            border-color: rgba(255, 255, 255, 0.08);
+        }
+        body.channel-condensed #channel-hero-logo img {
+            border-radius: 0.625rem;
+        }
+        body.channel-condensed #channel-hero-title {
+            margin-bottom: 0;
+            font-size: 1.25rem;
+            line-height: 1.2;
+        }
+        body.channel-condensed #channel-hero-meta {
+            opacity: 0;
+            max-height: 0;
+            margin-top: -0.25rem;
+            pointer-events: none;
+        }
+        body.channel-condensed #channel-hero-actions {
+            gap: 0.875rem;
+        }
+        body.channel-condensed .hero-action-button {
+            width: 2rem;
+            height: 2rem;
+            border-radius: 0;
+            background: transparent;
+            color: #E5E5E5;
+            backdrop-filter: none;
+        }
+        body.channel-condensed #composer-collapsed,
+        body.channel-condensed #composer-expanded {
+            opacity: 0;
+            max-height: 0;
+            margin-bottom: 0;
+            padding-top: 0;
+            padding-bottom: 0;
+            border-color: transparent;
+            overflow: hidden;
+            pointer-events: none;
+        }
+        body.channel-condensed #channel-tabs-row {
+            margin-top: 0;
+        }
+        body.channel-condensed #compact-compose-trigger {
+            opacity: 1;
+            transform: translateY(0);
+            pointer-events: auto;
+        }
+    </style>
+</head>
+<body class="bg-background-light dark:bg-background-dark text-gray-900 dark:text-text-primary-dark min-h-screen flex selection:bg-primary/30">
+<aside class="w-64 h-screen sticky top-0 flex flex-col bg-surface-dark border-r border-border-dark shrink-0 hidden md:flex self-start">
+<div class="h-16 flex items-center px-4 shrink-0">
+<div class="flex items-center gap-2 text-xl font-bold">
+<span class="material-icons-outlined">tag</span>
+<span>Soulmap</span>
+</div>
+</div>
+<div class="px-4 py-2 shrink-0">
+<div class="relative bg-background-dark rounded-md border border-border-dark flex items-center px-3 py-1.5 focus-within:border-gray-500 transition-colors whitespace-nowrap overflow-hidden flex-nowrap"><span class="material-icons-outlined text-text-secondary-dark text-sm mr-1.5 shrink-0">search</span><span class="text-text-secondary-dark text-xs mr-1 shrink-0">在</span><div class="bg-blue-500 text-white text-[9px] px-1 rounded mr-1 shrink-0">品</div><span class="text-text-primary-dark text-xs mr-2 truncate shrink-0">品运一家人</span><input class="bg-transparent border-none p-0 text-xs w-full focus:ring-0 text-text-primary-dark placeholder-text-secondary-dark min-w-0" placeholder="搜索" type="text"/></div>
+</div>
+<div class="flex-1 overflow-y-auto px-2 py-2 flex flex-col gap-6">
+<div>
+<div class="flex items-center justify-between px-2 py-1 mb-1 text-text-secondary-dark text-xs hover:text-text-primary-dark cursor-pointer group">
+<span>主页导航</span>
+<span class="material-icons-outlined text-sm opacity-0 group-hover:opacity-100 transition-opacity">expand_more</span>
+</div>
+<nav class="space-y-0.5">
+<a class="flex items-center gap-3 px-3 py-2 rounded-lg text-text-primary-dark hover:bg-surface-dark-hover transition-colors" href="#">
+<span class="material-icons-outlined text-xl">home</span>
+<span class="text-sm">频道动态</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2 rounded-lg text-text-primary-dark hover:bg-surface-dark-hover transition-colors" href="#">
+<span class="material-icons-outlined text-xl">explore</span>
+<span class="text-sm">探索发现</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2 rounded-lg text-text-primary-dark hover:bg-surface-dark-hover transition-colors" href="#">
+<span class="material-icons-outlined text-xl">grid_view</span>
+<span class="text-sm">管理中心</span>
+</a>
+</nav>
+</div>
+<div>
+<div class="px-2 py-1 mb-1 text-text-secondary-dark text-xs">未加入的频道</div>
+<nav class="space-y-0.5">
+<a class="flex items-center gap-3 px-3 py-2 rounded-lg text-text-primary-dark hover:bg-surface-dark-hover transition-colors" href="#">
+<img alt="WOTB" class="w-6 h-6 rounded bg-gray-700" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAxiN9gWIUX7cWSDflYH89K8jk32MrXGUpdwpCIa1GjDVF8QFgAUOQYwLhmD6U6iT94_v0wthIpCoMOMfr1KlAGbLhNv5oPvuO3Z63h4xUVFSUIcOGRAQMAvcpH2y71QalKVQ4RLUe04R7ef8PAAlnBSRM2ejY7HNcsrZvoa3w9-3FfQh0yQl5Nz3Xtp4aYiY2MnyZIB3Ar_icuZHlPKVdfL0dPRVDt2hT9MQrPcE6foXP03neuEzHRdVpLnUr21FuCZo_rKTCYN_o"/>
+<span class="text-sm truncate">WOTB中文玩家社区</span>
+</a>
+</nav>
+</div>
+<div>
+<div class="flex items-center justify-between px-2 py-1 mb-1 text-text-secondary-dark text-xs">
+<span>我的频道</span>
+<button class="hover:text-text-primary-dark transition-colors flex items-center gap-1">
+<span class="material-icons text-[16px]">add</span> 创建
+                    </button>
+</div>
+<nav class="space-y-0.5">
+<a class="flex items-center gap-3 px-3 py-2 rounded-lg bg-[#3D3D3D] text-text-primary-dark transition-colors" href="#">
+<div class="w-6 h-6 rounded bg-white flex items-center justify-center text-[10px] text-blue-500 font-bold overflow-hidden">
+<img alt="品运一家人" class="w-full h-full object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAVqcVgH58POihSGzt5QS9elVhSuD6heJvqRLwNWV5_3A0HA6cuLDIZWHXOys9GzsPmcBr8bCs6YNysoTVrRUe2eI1okf8b6pKMu528dIAU9iNVsSRYKn-y6hH-H_BhupGe_UNW7KAH4T0_H5ChSmLzx1EcItqlErj8yyi3hA4QKl8JuxXKzXpdNKUZ5CNT-czLpJZ0Hs2NzTbMc7UYrlbaJl30HvCFamtbiBgM4dlMWewtD7UfDjgZ5N6t-bN2QdOpZ_iCJM3fayU"/>
+</div>
+<span class="text-sm font-medium truncate">品运一家人</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2 rounded-lg text-text-primary-dark hover:bg-surface-dark-hover transition-colors" href="#">
+<img alt="ZJU" class="w-6 h-6 rounded bg-blue-800" src="https://lh3.googleusercontent.com/aida-public/AB6AXuC2oGsIJsYmOnoqvvQWFUW8Mu8IMS6HjuQqpBCo6HPM_bYXp2nU0J6V05c5q8QPZ7ZBcUFDc0BCiaHYNR4oTwaHbKwU4aLr3ffvU_pCaHRAO8cPKLnEmVadRpgAd4J1Lwf9UdAQLl9MBjAX6wEFsHPsMEZ_BlEnJ-AN5gNwWhv7qA9CyJzXxVC-gYDA5ZIRICW2aHQDhOCOguoSMGJUwIdD5iWiNuXOwgLElyndqXtQhf_nrTFD2B27IYLTxVF-fnN8A-nmllLZIQQ"/>
+<span class="text-sm truncate">浙江大学社区</span>
+</a>
+</nav>
+</div>
+</div>
+<div class="p-4 border-t border-border-dark shrink-0">
+<div class="flex items-center gap-3 hover:bg-surface-dark-hover p-2 -mx-2 rounded-lg cursor-pointer transition-colors">
+<img alt="User Avatar" class="w-8 h-8 rounded-full bg-gray-700 border border-gray-600" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDTB5B3U285URiZbUVzazxCY1KrV1NJgn5SeizM_-1WNdvOEruLKtbQL_isRvYvnXc5r2FF0JmTkTwu0_HH4j-niQ0SEL6CIIUyi1Ts0s4SeUeUiPkv6naQZjQPzTwvkKAh1DCZHp0QqJcLtN8jhSg1jLerw1o_Ti7PN5_2km2_16I6cdvh9ulcp30mI3R-1WfuY8LGjfpD0Cf4aHfzW3ME276Xn_4WGyNIzs5pxZkYhZh-QUOZ1MHJEHFDyhv77EU4cr1hbn90-L4"/>
+<span class="text-sm font-medium">老子骑牛</span>
+</div>
+</div>
+</aside>
+<main class="flex-1 min-w-0 bg-background-dark relative min-h-screen">
+<div id="channel-scroll">
+<div class="max-w-[1200px] mx-auto px-4 lg:px-8 py-6">
+<div class="sticky top-0 z-30" id="channel-top-region">
+<div class="pb-6 transition-all duration-300" id="channel-top-inner">
+<div class="relative bg-gradient-to-r from-blue-50 to-blue-100 dark:from-[#1E293B] dark:to-[#0F172A] rounded-2xl p-6 mb-6 overflow-hidden flex items-center justify-between border border-border-dark transition-all duration-300" id="channel-hero">
+<div class="absolute right-0 top-0 w-64 h-full bg-white/10 dark:bg-white/5 skew-x-12 translate-x-20 transition-opacity duration-300 hero-decor"></div>
+<div class="absolute right-32 top-0 w-32 h-full bg-white/20 dark:bg-white/5 skew-x-12 translate-x-20 transition-opacity duration-300 hero-decor"></div>
+<div class="flex items-center gap-4 relative z-10 min-w-0">
+<div class="w-16 h-16 bg-white rounded-full flex items-center justify-center p-1 shadow-sm border border-gray-100 dark:border-gray-700 transition-all duration-300 shrink-0" id="channel-hero-logo">
+<img alt="Channel Logo" class="w-full h-full object-cover rounded-full" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDJUmmuvmt3jmrXR6sjC-XgIw7ZpGWHK2ClL0rFR7fWwCkwWqjrmHW39Py4Oi-W0kn2oYCMKoNVvH5vAdlhcYDzUfqmH67hsNpn2JEEuVJNKGnXMflYRLFqtaIpQdlJrUocYHAsapz8CAuaAK8kSS0EGaoQfWEx31DipdiQCFDAFw-1EVVf3XaU8tzBCxY_HmC9peicAbPCoNUtPvO-SwM7dKIClndraRoa0_3S5laPdFIz7G3On8LqOlZSEB-nMy5BSBAljxc7jIw"/>
+</div>
+<div class="min-w-0">
+<h1 class="text-2xl font-bold text-gray-900 dark:text-white mb-1 transition-all duration-300" id="channel-hero-title">品运一家人</h1>
+<div class="flex items-center gap-1 text-sm text-gray-600 dark:text-gray-400 transition-all duration-300 overflow-hidden" id="channel-hero-meta">
+<span class="material-icons text-[16px]">person</span>
+<span>16 成员</span>
+</div>
+</div>
+</div>
+<div class="flex items-center gap-3 relative z-10 transition-all duration-300" id="channel-hero-actions">
+<button class="w-10 h-10 rounded-full bg-white/50 dark:bg-white/10 backdrop-blur-sm flex items-center justify-center hover:bg-white/80 dark:hover:bg-white/20 transition-colors text-gray-700 dark:text-gray-200 hero-action-button" type="button">
+<span class="material-icons-outlined text-xl">share</span>
+</button>
+<button class="w-10 h-10 rounded-full bg-white/50 dark:bg-white/10 backdrop-blur-sm flex items-center justify-center hover:bg-white/80 dark:hover:bg-white/20 transition-colors text-gray-700 dark:text-gray-200 hero-action-button" id="hero-message-trigger" type="button">
+<span class="material-icons-outlined text-xl">mail</span>
+</button>
+<button class="w-10 h-10 rounded-full bg-white/50 dark:bg-white/10 backdrop-blur-sm flex items-center justify-center hover:bg-white/80 dark:hover:bg-white/20 transition-colors text-gray-700 dark:text-gray-200 hero-action-button" id="hero-menu-trigger" type="button">
+<span class="material-icons-outlined text-xl">menu</span>
+</button>
+</div>
+</div>
+<div class="flex flex-col xl:flex-row gap-6 items-start" id="channel-upper-row">
+<div class="flex-1 min-w-0 max-w-3xl">
+<div class="bg-surface-dark border border-border-dark rounded-xl p-3 mb-6 items-center gap-3 hidden transition-all duration-300" id="composer-collapsed">
+<img alt="My Avatar" class="w-8 h-8 rounded-full border border-gray-600" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAdn4SXXvi49UKFKBuOYSU69PaV_4engMSiIUkQpcH9Dq-zjinv9rRqNzjFK-_KuzU2Gr6HOfI2OZ-01V7rzVGIWaSyOPbg9Q5rsFMfV-JXcD32yqlps9leknFzregRkqtJVBZWeZ3TJKaExBlvUeO_2F-5IORdrpgxMw4eRaXxtuOmsn0ulMBWYOK6FZtBAis0lvg3BKhmbjcDhTRygvyVEKb6zY2afnZACw8KV6nqOp9MLhO7nLBMaFoVtMhyjFLpOuFQrJB8wuI"/>
+<button class="flex-1 bg-transparent border-none text-left text-sm text-text-secondary-dark hover:text-text-primary-dark transition-colors focus:outline-none" id="composer-expand" type="button">
+期待你的分享...
+</button>
+<div class="flex items-center gap-2 text-text-secondary-dark">
+<button class="p-1.5 hover:text-text-primary-dark hover:bg-surface-dark-hover rounded transition-colors" type="button"><span class="material-icons-outlined text-xl">sentiment_satisfied_alt</span></button>
+<button class="p-1.5 hover:text-text-primary-dark hover:bg-surface-dark-hover rounded transition-colors" type="button"><span class="material-icons-outlined text-xl">alternate_email</span></button>
+<button class="p-1.5 hover:text-text-primary-dark hover:bg-surface-dark-hover rounded transition-colors" type="button"><span class="material-icons-outlined text-xl">image</span></button>
+<button class="p-1.5 hover:text-text-primary-dark hover:bg-surface-dark-hover rounded transition-colors" type="button"><span class="material-icons-outlined text-xl">campaign</span></button>
+</div>
+</div>
+<div class="bg-surface-dark/60 border-2 border-primary rounded-xl p-4 mb-6 flex flex-col min-h-[200px] transition-all duration-300" id="composer-expanded">
+<div class="flex items-center justify-between mb-2">
+<div class="flex items-center gap-2">
+<img alt="My Avatar" class="w-6 h-6 rounded-full border border-gray-600" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAdn4SXXvi49UKFKBuOYSU69PaV_4engMSiIUkQpcH9Dq-zjinv9rRqNzjFK-_KuzU2Gr6HOfI2OZ-01V7rzVGIWaSyOPbg9Q5rsFMfV-JXcD32yqlps9leknFzregRkqtJVBZWeZ3TJKaExBlvUeO_2F-5IORdrpgxMw4eRaXxtuOmsn0ulMBWYOK6FZtBAis0lvg3BKhmbjcDhTRygvyVEKb6zY2afnZACw8KV6nqOp9MLhO7nLBMaFoVtMhyjFLpOuFQrJB8wuI"/>
+<span class="text-sm text-text-secondary-dark">管理员</span>
+</div>
+<div class="flex items-center gap-1 text-text-secondary-dark">
+<button class="p-1 hover:text-text-primary-dark rounded transition-colors" type="button"><span class="material-icons-outlined text-xl">sentiment_satisfied_alt</span></button>
+<button class="p-1 hover:text-text-primary-dark rounded transition-colors" type="button"><span class="material-icons-outlined text-xl">alternate_email</span></button>
+<button class="p-1 hover:text-text-primary-dark rounded transition-colors" type="button"><span class="material-icons-outlined text-xl">image</span></button>
+<button class="p-1 hover:text-text-primary-dark rounded transition-colors" type="button"><span class="material-icons-outlined text-xl">campaign</span></button>
+<div class="w-px h-4 bg-border-dark mx-1"></div>
+<button class="p-1 hover:text-text-primary-dark rounded transition-colors" id="composer-close" type="button"><span class="material-icons-outlined text-xl">close</span></button>
+</div>
+</div>
+<textarea class="flex-1 w-full bg-transparent border-none text-sm text-text-primary-dark placeholder-text-secondary-dark focus:ring-0 p-0 resize-none min-h-[80px]" id="composer-textarea" placeholder="期待你的分享..."></textarea>
+<div class="flex items-end justify-between mt-4">
+<button class="w-16 h-16 rounded-lg border border-dashed border-gray-600 hover:border-gray-400 flex items-center justify-center text-gray-500 hover:text-gray-300 transition-colors shrink-0">
+<span class="material-icons text-2xl">add</span>
+</button>
+<div class="flex items-center gap-3">
+<span class="text-xs text-text-secondary-dark">0/1000</span>
+<button class="flex items-center gap-1 px-3 py-1.5 rounded border border-border-dark text-sm text-text-primary-dark hover:bg-surface-dark-hover transition-colors">
+                不选择板块 <span class="material-icons text-sm">arrow_drop_down</span>
+</button>
+<button class="px-5 py-1.5 rounded bg-primary hover:bg-blue-600 text-white text-sm font-medium transition-colors">
+                发表
+            </button>
+</div>
+</div>
+</div>
+<div class="flex items-end justify-between gap-4 mb-4 px-2 transition-all duration-300 relative" id="channel-tabs-row">
+<div class="min-w-0 flex-1" id="channel-tabs-rail">
+<div class="flex items-center gap-6 min-w-0" id="channel-tabs">
+<div class="relative">
+<button class="text-text-secondary-dark hover:text-text-primary-dark pb-3" id="tabs-filter-trigger" type="button">
+<span class="material-icons-outlined text-lg">swap_vert</span>
+</button>
+<div class="absolute left-[-1rem] top-[calc(100%-0.15rem)] z-40 hidden w-[10rem] opacity-0 translate-y-2" id="tabs-filter-popover">
+<div class="overflow-hidden rounded-[16px] border border-border-dark bg-surface-dark p-2 shadow-[0_18px_42px_rgba(0,0,0,0.34)]">
+<button class="flex w-full items-center justify-between rounded-[12px] px-4 py-3 text-left text-[15px] font-medium text-text-primary-dark transition-colors hover:bg-surface-dark-hover" data-filter-option="hot" type="button">
+<span>热门</span>
+<span class="material-icons text-[20px] text-primary">check</span>
+</button>
+<button class="flex w-full items-center justify-between rounded-[12px] px-4 py-3 text-left text-[15px] font-medium text-text-primary-dark transition-colors hover:bg-surface-dark-hover" data-filter-option="new-post" type="button">
+<span>新发表</span>
+<span class="material-icons text-[20px] text-primary opacity-0">check</span>
+</button>
+<button class="flex w-full items-center justify-between rounded-[12px] px-4 py-3 text-left text-[15px] font-medium text-text-primary-dark transition-colors hover:bg-surface-dark-hover" data-filter-option="new-reply" type="button">
+<span>新回复</span>
+<span class="material-icons text-[20px] text-primary opacity-0">check</span>
+</button>
+</div>
+</div>
+</div>
+<button class="text-text-primary-dark font-medium pb-3 border-b-2 border-primary relative top-[1px]">全部</button>
+<button class="text-text-secondary-dark hover:text-text-primary-dark pb-3 font-medium">国王天使</button>
+</div>
+</div>
+<button class="inline-flex items-center justify-center gap-2 rounded-full border border-border-dark px-5 py-2 text-sm font-semibold text-text-primary-dark opacity-0 translate-y-2 pointer-events-none transition-all duration-300" id="compact-compose-trigger" type="button">
+<span class="material-icons-outlined text-[18px]">edit</span>
+发帖
+</button>
+</div>
+</div>
+<div class="hidden xl:block w-72 shrink-0" aria-hidden="true"></div>
+</div>
+</div>
+</div>
+<div class="flex gap-6">
+<div class="flex-1 min-w-0 max-w-3xl">
+<div class="space-y-6 pb-20">
+<article class="border-b border-border-dark pb-6">
+<div class="flex items-center gap-2 mb-3">
+<img alt="Author" class="w-6 h-6 rounded-full" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAAF1xIAURg4pscz_NBpuuG-SxRtXMwz7Bj6kZwsrWNFW-odFm30orXRucNJOPwamQYgZR1TEIhZkL5O10eQJtvrDM8t822PyG2dKeoOvKHYsw6ZeMXaQUv-mcoKFb2ir32XD-DN4ZbVpW9SN4fPdJet1EmrS2L2uG_zqMTRQUXqC6d13nTjeInGSZrwvkq2IMSe99646zSnQdupaTxFNMC0rzDB4UquXVWmFsLO4Ial8RT0DgamryGslxLm-1OIJTEdDTRdHXJjC4"/>
+<span class="text-sm text-text-secondary-dark">我不是上帝 · 1天前</span>
+</div>
+<div class="text-text-primary-dark text-[15px] leading-relaxed mb-4 whitespace-pre-wrap">to 苹果：
+你的改运玄学来了，更多的是心法的指导：
+✌️首先就是尽人事听天命，把自己能做到的所有部分都做好，上天会眷顾你的。... <span class="text-primary hover:underline cursor-pointer">全文</span></div>
+<div class="flex items-center gap-6 text-text-secondary-dark">
+<button class="flex items-center gap-1.5 hover:text-text-primary-dark transition-colors text-sm">
+<span class="material-icons-outlined text-[18px]">favorite_border</span> 点赞
+                                </button>
+<button class="flex items-center gap-1.5 hover:text-text-primary-dark transition-colors text-sm">
+<span class="material-icons-outlined text-[18px]">chat_bubble_outline</span> 评论
+                                </button>
+<button class="flex items-center gap-1.5 hover:text-text-primary-dark transition-colors text-sm">
+<span class="material-icons-outlined text-[18px]">share</span> 分享
+                                </button>
+</div>
+</article>
+<article class="border-b border-border-dark pb-6">
+<div class="flex items-center gap-2 mb-3">
+<img alt="Author" class="w-6 h-6 rounded-full" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCcKwUvE26sD93HXFPeaZKG4rcO46TtVUuH82BX4ziwxtQO6LqUqi7htZJg5ldPwrXuMlk-2HE9PBqh4V3ripA5SFIRoJzC1z5TUHOahBodZdJ6nyPtbI3ueAl8kH5khm1HV62UVFoUCxs9G6GCSfF6BwWaSCx8Mo7j_89w8D_bdtvADDehJLb4t9gCgUFtvyQYlkfWhwEvSG3zS91PnAoiMUsN4C6EDpZP2lxYDUwhc8vX9KFUg80eEZgmyLjAUr2k7jQ0cGijT-A"/>
+<span class="text-sm text-text-secondary-dark">上帝大人 · 3天前</span>
+</div>
+<div class="text-text-primary-dark text-[15px] leading-relaxed mb-4">随缘啦，就是想看到你们各种神奇的愿望哈哈哈哈</div>
+<div class="flex items-center gap-6 text-text-secondary-dark">
+<button class="flex items-center gap-1.5 hover:text-text-primary-dark transition-colors text-sm">
+<span class="material-icons-outlined text-[18px]">favorite_border</span> 点赞
+                                </button>
+<button class="flex items-center gap-1.5 hover:text-text-primary-dark transition-colors text-sm">
+<span class="material-icons-outlined text-[18px]">chat_bubble_outline</span> 2
+                                </button>
+<button class="flex items-center gap-1.5 hover:text-text-primary-dark transition-colors text-sm">
+<span class="material-icons-outlined text-[18px]">share</span> 分享
+                                </button>
+</div>
+</article>
+<article class="border-b border-border-dark pb-6">
+<div class="flex items-center gap-2 mb-3">
+<img alt="Author" class="w-6 h-6 rounded-full" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAMEcp_Gb2H95x3OK1WiHC-EzuWE003ywUAtg9SEVazxij0OCuoZ50_DrAn602n1xUaJmFqPITtx0LAknqLJzjQz9eO6w6a9Ak9r77Qp9_EzQPiKdoNVrvoQ1LaimRB6o8UOT5Q_WRzhrKcmgvZYNePZUUiORLaFawGrWHI_8yS8gqV-JuBxX9sDrx2FEr1gcRL1qlAoW9oXheuh309Vm9ygZmwKzVA8_iJS66DcBDj1vo1aetR7EVQKdABFPiEu_vlhKfkrn0ArYk"/>
+<span class="text-xs bg-surface-dark-hover text-text-secondary-dark px-1.5 py-0.5 rounded border border-border-dark">管理员</span>
+<span class="text-xs bg-red-900/30 text-red-500 border border-red-900/50 px-1.5 py-0.5 rounded">频道主</span>
+<span class="text-sm text-text-secondary-dark ml-1">5天前</span>
+</div>
+<div class="text-text-primary-dark text-[15px] leading-relaxed mb-4">可以直接在这发自己的内容，这样就不会被识破了</div>
+<div class="flex items-center gap-6 text-text-secondary-dark">
+<button class="flex items-center gap-1.5 hover:text-text-primary-dark transition-colors text-sm">
+<span class="material-icons-outlined text-[18px]">favorite_border</span> 1
+                                </button>
+<button class="flex items-center gap-1.5 hover:text-text-primary-dark transition-colors text-sm">
+<span class="material-icons-outlined text-[18px]">chat_bubble_outline</span> 2
+                                </button>
+<button class="flex items-center gap-1.5 hover:text-text-primary-dark transition-colors text-sm">
+<span class="material-icons-outlined text-[18px]">share</span> 分享
+                                </button>
+</div>
+</article>
+<article class="border-b border-border-dark pb-6">
+<div class="flex items-center gap-2 mb-3">
+<img alt="Author" class="w-6 h-6 rounded-full" src="https://lh3.googleusercontent.com/aida-public/AB6AXuD7dADvgkUZTmxeXdVrXRGz76Ic6R6Wd6I4KZ1sPj4qgDDug3FSXbt2MHfAjLymGrdxs1loOM-lwzNDWfpjTfON7UuMTrWPl053BjvRGm_VZdQLUtD9KvLKwjz03l_X740oiKoRp8XGKaK_swULjXNS4iVPZr2Oult7W_RibE_RDDkx_dg75u32hmhdVNzVPyVRbrBVe9bJt0Utq1RZTnetWnhQFsWzK7GZYVWtLQsMrGURY_piyy7q5wJq2TUz2sc2IWSw6UTn2wE"/>
+<span class="text-sm text-text-secondary-dark">瓜子 · 5天前</span>
+</div>
+<div class="text-text-primary-dark text-[15px] leading-relaxed mb-4">所以咋匿名嘞</div>
+<div class="flex items-center gap-6 text-text-secondary-dark">
+<button class="flex items-center gap-1.5 hover:text-text-primary-dark transition-colors text-sm">
+<span class="material-icons-outlined text-[18px]">favorite_border</span> 点赞
+                                </button>
+<button class="flex items-center gap-1.5 hover:text-text-primary-dark transition-colors text-sm">
+<span class="material-icons-outlined text-[18px]">chat_bubble_outline</span> 评论
+                                </button>
+<button class="flex items-center gap-1.5 hover:text-text-primary-dark transition-colors text-sm">
+<span class="material-icons-outlined text-[18px]">share</span> 分享
+                                </button>
+</div>
+</article>
+</div>
+</div>
+<div class="hidden xl:block w-72 shrink-0" id="channel-sidebar-column">
+<div class="sticky" id="channel-sidebar-sticky">
+<div class="bg-background-dark border border-border-dark rounded-xl p-4 min-h-[160px] flex flex-col transition-all duration-300" id="channel-sidebar-card">
+<h2 class="text-sm text-text-secondary-dark mb-auto">公告</h2>
+<div class="flex-1 flex items-center justify-center text-sm text-text-secondary-dark/50">
+                            暂无公告
+                        </div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</main>
+<div class="fixed z-40 w-[22.5rem] max-w-[calc(100vw-2rem)] hidden opacity-0 translate-y-2" id="channel-menu-popover">
+<div class="overflow-hidden rounded-[20px] border border-border-dark bg-[#202020]/96 p-5 shadow-[0_20px_64px_rgba(0,0,0,0.42)] backdrop-blur-xl">
+<div class="flex items-center gap-4">
+<div class="h-16 w-16 overflow-hidden rounded-[14px] border border-white/10 bg-white/5 shadow-[0_8px_18px_rgba(0,0,0,0.22)]">
+<img alt="Channel Logo" class="h-full w-full object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDJUmmuvmt3jmrXR6sjC-XgIw7ZpGWHK2ClL0rFR7fWwCkwWqjrmHW39Py4Oi-W0kn2oYCMKoNVvH5vAdlhcYDzUfqmH67hsNpn2JEEuVJNKGnXMflYRLFqtaIpQdlJrUocYHAsapz8CAuaAK8kSS0EGaoQfWEx31DipdiQCFDAFw-1EVVf3XaU8tzBCxY_HmC9peicAbPCoNUtPvO-SwM7dKIClndraRoa0_3S5laPdFIz7G3On8LqOlZSEB-nMy5BSBAljxc7jIw"/>
+</div>
+<div class="min-w-0">
+<div class="text-[1.25rem] font-semibold leading-tight text-text-primary-dark">品运一家人</div>
+<div class="mt-3 text-[13px] text-text-secondary-dark">pd23856970</div>
+</div>
+</div>
+<div class="mt-5 space-y-3">
+<button class="flex w-full items-center justify-between rounded-[16px] border border-border-dark bg-white/[0.02] px-4 py-3.5 text-left transition-colors hover:bg-surface-dark-hover" type="button">
+<span class="text-[15px] font-medium text-text-primary-dark">本频道昵称和头像</span>
+<span class="flex items-center gap-2.5">
+<span class="text-[15px] text-text-secondary-dark">管理员</span>
+<img alt="Admin Avatar" class="h-7 w-7 rounded-full object-cover border border-white/10" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAMEcp_Gb2H95x3OK1WiHC-EzuWE003ywUAtg9SEVazxij0OCuoZ50_DrAn602n1xUaJmFqPITtx0LAknqLJzjQz9eO6w6a9Ak9r77Qp9_EzQPiKdoNVrvoQ1LaimRB6o8UOT5Q_WRzhrKcmgvZYNePZUUiORLaFawGrWHI_8yS8gqV-JuBxX9sDrx2FEr1gcRL1qlAoW9oXheuh309Vm9ygZmwKzVA8_iJS66DcBDj1vo1aetR7EVQKdABFPiEu_vlhKfkrn0ArYk"/>
+<span class="material-icons-outlined text-[22px] text-text-secondary-dark">chevron_right</span>
+</span>
+</button>
+<button class="flex w-full items-center justify-between rounded-[16px] border border-border-dark bg-white/[0.02] px-4 py-3.5 text-left transition-colors hover:bg-surface-dark-hover" type="button">
+<span class="text-[15px] font-medium text-text-primary-dark">频道管理</span>
+<span class="material-icons-outlined text-[20px] text-text-secondary-dark">chevron_right</span>
+</button>
+<button class="flex w-full items-center justify-between rounded-[16px] border border-border-dark bg-white/[0.02] px-4 py-3.5 text-left transition-colors hover:bg-surface-dark-hover" type="button">
+<span class="text-[15px] font-medium text-text-primary-dark">消息通知</span>
+<span class="material-icons-outlined text-[20px] text-text-secondary-dark">chevron_right</span>
+</button>
+</div>
+</div>
+</div>
+<div class="fixed top-24 right-8 z-40 w-[24rem] max-w-[calc(100vw-2rem)] hidden opacity-0 translate-y-2" id="message-popover">
+<div class="flex h-[calc(100vh-8rem)] min-h-[40rem] max-h-[calc(100vh-8rem)] flex-col overflow-hidden rounded-[24px] border border-border-dark bg-[#202020]/95 shadow-[0_20px_64px_rgba(0,0,0,0.42)] backdrop-blur-xl">
+<div class="grid grid-cols-2 border-b border-border-dark">
+<button class="border-b-[3px] border-primary px-6 py-4 text-[16px] font-semibold text-text-primary-dark" data-message-tab="interactive" type="button">互动消息</button>
+<button class="border-b-[3px] border-transparent px-6 py-4 text-[16px] font-semibold text-text-secondary-dark transition-colors hover:text-text-primary-dark" data-message-tab="admin" type="button">管理消息</button>
+</div>
+<div class="flex-1 overflow-y-auto px-4 py-5">
+<div class="space-y-5" data-message-panel="interactive">
+<article class="rounded-2xl bg-white/3 px-4 py-3 flex gap-3">
+<img alt="Avatar" class="mt-1 h-11 w-11 rounded-full object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAAF1xIAURg4pscz_NBpuuG-SxRtXMwz7Bj6kZwsrWNFW-odFm30orXRucNJOPwamQYgZR1TEIhZkL5O10eQJtvrDM8t822PyG2dKeoOvKHYsw6ZeMXaQUv-mcoKFb2ir32XD-DN4ZbVpW9SN4fPdJet1EmrS2L2uG_zqMTRQUXqC6d13nTjeInGSZrwvkq2IMSe99646zSnQdupaTxFNMC0rzDB4UquXVWmFsLO4Ial8RT0DgamryGslxLm-1OIJTEdDTRdHXJjC4"/>
+<div class="min-w-0 flex-1">
+<div class="mb-1.5 flex items-center gap-3 text-[12px]">
+<span class="font-medium text-text-primary-dark">我不是上帝</span>
+<span class="text-text-secondary-dark">2026.04.13</span>
+</div>
+<div class="mb-2.5 text-[14px] leading-7 text-text-primary-dark">评论了我的帖子： 那很好了</div>
+<div class="mb-4 border-l border-border-dark pl-3 text-[12px] text-text-secondary-dark">管理员： 可以直接在这发自己的内容…</div>
+<div class="flex gap-3">
+<button class="inline-flex min-w-[116px] items-center justify-center gap-1.5 rounded-full border border-border-dark px-4 py-1.5 text-[13px] font-medium text-text-primary-dark hover:bg-surface-dark-hover transition-colors" type="button">
+<span class="material-icons-outlined text-[18px]">favorite_border</span>赞
+</button>
+<button class="inline-flex min-w-[116px] items-center justify-center gap-1.5 rounded-full border border-border-dark px-4 py-1.5 text-[13px] font-medium text-text-primary-dark hover:bg-surface-dark-hover transition-colors" type="button">
+<span class="material-icons-outlined text-[18px]">chat_bubble_outline</span>回复
+</button>
+</div>
+</div>
+</article>
+<article class="flex gap-3">
+<img alt="Avatar" class="mt-1 h-11 w-11 rounded-full object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCcKwUvE26sD93HXFPeaZKG4rcO46TtVUuH82BX4ziwxtQO6LqUqi7htZJg5ldPwrXuMlk-2HE9PBqh4V3ripA5SFIRoJzC1z5TUHOahBodZdJ6nyPtbI3ueAl8kH5khm1HV62UVFoUCxs9G6GCSfF6BwWaSCx8Mo7j_89w8D_bdtvADDehJLb4t9gCgUFtvyQYlkfWhwEvSG3zS91PnAoiMUsN4C6EDpZP2lxYDUwhc8vX9KFUg80eEZgmyLjAUr2k7jQ0cGijT-A"/>
+<div class="min-w-0 flex-1">
+<div class="mb-1.5 flex items-center gap-3 text-[12px]">
+<span class="font-medium text-text-primary-dark">主公请受我一拜</span>
+<span class="text-text-secondary-dark">2026.04.13</span>
+</div>
+<div class="mb-2.5 text-[14px] leading-7 text-text-primary-dark">评论了我的帖子： 好诶 [动画表情]</div>
+<div class="mb-4 border-l border-border-dark pl-3 text-[12px] text-text-secondary-dark">管理员： 可以直接在这发自己的内容…</div>
+<div class="flex gap-3">
+<button class="inline-flex min-w-[116px] items-center justify-center gap-1.5 rounded-full border border-border-dark px-4 py-1.5 text-[13px] font-medium text-text-primary-dark hover:bg-surface-dark-hover transition-colors" type="button">
+<span class="material-icons-outlined text-[18px]">favorite_border</span>赞
+</button>
+<button class="inline-flex min-w-[116px] items-center justify-center gap-1.5 rounded-full border border-border-dark px-4 py-1.5 text-[13px] font-medium text-text-primary-dark hover:bg-surface-dark-hover transition-colors" type="button">
+<span class="material-icons-outlined text-[18px]">chat_bubble_outline</span>回复
+</button>
+</div>
+</div>
+</article>
+<article class="flex gap-3">
+<img alt="Avatar" class="mt-1 h-11 w-11 rounded-full object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCcKwUvE26sD93HXFPeaZKG4rcO46TtVUuH82BX4ziwxtQO6LqUqi7htZJg5ldPwrXuMlk-2HE9PBqh4V3ripA5SFIRoJzC1z5TUHOahBodZdJ6nyPtbI3ueAl8kH5khm1HV62UVFoUCxs9G6GCSfF6BwWaSCx8Mo7j_89w8D_bdtvADDehJLb4t9gCgUFtvyQYlkfWhwEvSG3zS91PnAoiMUsN4C6EDpZP2lxYDUwhc8vX9KFUg80eEZgmyLjAUr2k7jQ0cGijT-A"/>
+<div class="min-w-0 flex-1">
+<div class="mb-1.5 flex items-center gap-3 text-[12px]">
+<span class="font-medium text-text-primary-dark">主公请受我一拜</span>
+<span class="text-text-secondary-dark">2026.04.13</span>
+</div>
+<div class="mb-2.5 text-[14px] leading-7 text-text-primary-dark">赞了我的帖子： <span class="text-red-500">❤</span></div>
+<div class="border-l border-border-dark pl-3 text-[12px] text-text-secondary-dark">管理员： 可以直接在这发自己的内容…</div>
+</div>
+</article>
+</div>
+<div class="hidden py-16 text-center" data-message-panel="admin">
+<div class="text-base font-medium text-text-primary-dark">暂无管理消息</div>
+<div class="mt-3 text-sm text-text-secondary-dark">这里会显示频道审核、系统通知和管理提醒。</div>
+</div>
+</div>
+</div>
+</div>
+<script>
+        const pageBody = document.body;
+        const heroMessageTrigger = document.getElementById("hero-message-trigger");
+        const heroMenuTrigger = document.getElementById("hero-menu-trigger");
+        const tabsFilterTrigger = document.getElementById("tabs-filter-trigger");
+        const tabsFilterPopover = document.getElementById("tabs-filter-popover");
+        const tabsFilterOptions = document.querySelectorAll("[data-filter-option]");
+        const channelMenuPopover = document.getElementById("channel-menu-popover");
+        const messagePopover = document.getElementById("message-popover");
+        const messageTabButtons = document.querySelectorAll("[data-message-tab]");
+        const messagePanels = document.querySelectorAll("[data-message-panel]");
+        const channelTopRegion = document.getElementById("channel-top-region");
+        const channelTopInner = document.getElementById("channel-top-inner");
+        const channelHero = document.getElementById("channel-hero");
+        const channelUpperRow = document.getElementById("channel-upper-row");
+        const channelSidebarColumn = document.getElementById("channel-sidebar-column");
+        const channelSidebarSticky = document.getElementById("channel-sidebar-sticky");
+        const composerExpanded = document.getElementById("composer-expanded");
+        const composerCollapsed = document.getElementById("composer-collapsed");
+        const composerClose = document.getElementById("composer-close");
+        const composerExpand = document.getElementById("composer-expand");
+        const compactComposeTrigger = document.getElementById("compact-compose-trigger");
+        const composerTextarea = document.getElementById("composer-textarea");
+        let composerMode = "collapsed";
+        let activeFilterOption = "hot";
+
+        const showCollapsedComposer = () => {
+            composerMode = "collapsed";
+            composerExpanded.classList.add("hidden");
+            composerExpanded.classList.remove("flex");
+            composerCollapsed.classList.remove("hidden");
+            composerCollapsed.classList.add("flex");
+        };
+
+        const showExpandedComposer = () => {
+            composerMode = "expanded";
+            composerCollapsed.classList.add("hidden");
+            composerCollapsed.classList.remove("flex");
+            composerExpanded.classList.remove("hidden");
+            composerExpanded.classList.add("flex");
+            if (!pageBody.classList.contains("channel-condensed")) {
+                composerTextarea.focus();
+            }
+        };
+
+        composerClose.addEventListener("click", showCollapsedComposer);
+        composerExpand.addEventListener("click", showExpandedComposer);
+        composerCollapsed.addEventListener("click", (event) => {
+            if (event.target.closest("button")) {
+                return;
+            }
+            showExpandedComposer();
+        });
+        compactComposeTrigger.addEventListener("click", () => {
+            pageBody.classList.remove("channel-condensed");
+            window.scrollTo({ top: 0, behavior: "smooth" });
+            showExpandedComposer();
+            requestAnimationFrame(() => {
+                composerTextarea.focus();
+            });
+        });
+
+        const syncTopRegionState = () => {
+            const isCondensed = window.scrollY > 36;
+            pageBody.classList.toggle("channel-condensed", isCondensed);
+            if (channelSidebarColumn && channelUpperRow && channelTopInner) {
+                const topInnerPaddingBottom = parseFloat(window.getComputedStyle(channelTopInner).paddingBottom) || 0;
+                const sidebarLift = Math.max(0, channelUpperRow.offsetHeight + topInnerPaddingBottom);
+                channelSidebarColumn.style.marginTop = window.innerWidth >= 1280 ? `-${sidebarLift}px` : "";
+            }
+            if (channelSidebarSticky) {
+                channelSidebarSticky.style.top = `${channelHero.offsetHeight + 24}px`;
+            }
+            if (!channelMenuPopover.classList.contains("hidden")) {
+                positionChannelMenuPopover();
+            }
+        };
+
+        const openMessagePopover = () => {
+            closeChannelMenuPopover();
+            messagePopover.classList.remove("hidden");
+            requestAnimationFrame(() => {
+                messagePopover.classList.remove("opacity-0", "translate-y-2");
+                messagePopover.classList.add("opacity-100", "translate-y-0");
+            });
+        };
+
+        const closeMessagePopover = () => {
+            messagePopover.classList.remove("opacity-100", "translate-y-0");
+            messagePopover.classList.add("opacity-0", "translate-y-2");
+            window.setTimeout(() => {
+                if (messagePopover.classList.contains("opacity-0")) {
+                    messagePopover.classList.add("hidden");
+                }
+            }, 160);
+        };
+
+        const positionChannelMenuPopover = () => {
+            const triggerRect = heroMenuTrigger.getBoundingClientRect();
+            const popoverWidth = Math.min(464, window.innerWidth - 32);
+            const left = Math.min(window.innerWidth - popoverWidth - 16, Math.max(16, triggerRect.right - popoverWidth + 8));
+            channelMenuPopover.style.top = `${triggerRect.bottom + 14}px`;
+            channelMenuPopover.style.left = `${left}px`;
+        };
+
+        const openChannelMenuPopover = () => {
+            closeMessagePopover();
+            positionChannelMenuPopover();
+            channelMenuPopover.classList.remove("hidden");
+            requestAnimationFrame(() => {
+                channelMenuPopover.classList.remove("opacity-0", "translate-y-2");
+                channelMenuPopover.classList.add("opacity-100", "translate-y-0");
+            });
+        };
+
+        const closeChannelMenuPopover = () => {
+            channelMenuPopover.classList.remove("opacity-100", "translate-y-0");
+            channelMenuPopover.classList.add("opacity-0", "translate-y-2");
+            window.setTimeout(() => {
+                if (channelMenuPopover.classList.contains("opacity-0")) {
+                    channelMenuPopover.classList.add("hidden");
+                }
+            }, 160);
+        };
+
+        const toggleChannelMenuPopover = () => {
+            if (channelMenuPopover.classList.contains("hidden")) {
+                openChannelMenuPopover();
+                return;
+            }
+            closeChannelMenuPopover();
+        };
+
+        const toggleMessagePopover = () => {
+            if (messagePopover.classList.contains("hidden")) {
+                openMessagePopover();
+                return;
+            }
+            closeMessagePopover();
+        };
+
+        const syncTabsFilterSelection = () => {
+            tabsFilterOptions.forEach((button) => {
+                const isActive = button.dataset.filterOption === activeFilterOption;
+                const checkIcon = button.querySelector(".material-icons");
+                button.classList.toggle("bg-surface-dark-hover", isActive);
+                if (checkIcon) {
+                    checkIcon.classList.toggle("opacity-0", !isActive);
+                }
+            });
+        };
+
+        const openTabsFilterPopover = () => {
+            closeMessagePopover();
+            closeChannelMenuPopover();
+            tabsFilterPopover.classList.remove("hidden");
+            requestAnimationFrame(() => {
+                tabsFilterPopover.classList.remove("opacity-0", "translate-y-2");
+                tabsFilterPopover.classList.add("opacity-100", "translate-y-0");
+            });
+        };
+
+        const closeTabsFilterPopover = () => {
+            tabsFilterPopover.classList.remove("opacity-100", "translate-y-0");
+            tabsFilterPopover.classList.add("opacity-0", "translate-y-2");
+            window.setTimeout(() => {
+                if (tabsFilterPopover.classList.contains("opacity-0")) {
+                    tabsFilterPopover.classList.add("hidden");
+                }
+            }, 140);
+        };
+
+        const toggleTabsFilterPopover = () => {
+            if (tabsFilterPopover.classList.contains("hidden")) {
+                openTabsFilterPopover();
+                return;
+            }
+            closeTabsFilterPopover();
+        };
+
+        const setMessageTab = (tab) => {
+            messageTabButtons.forEach((button) => {
+                const isActive = button.dataset.messageTab === tab;
+                button.classList.toggle("border-primary", isActive);
+                button.classList.toggle("text-text-primary-dark", isActive);
+                button.classList.toggle("border-transparent", !isActive);
+                button.classList.toggle("text-text-secondary-dark", !isActive);
+            });
+
+            messagePanels.forEach((panel) => {
+                panel.classList.toggle("hidden", panel.dataset.messagePanel !== tab);
+            });
+        };
+
+        heroMessageTrigger.addEventListener("click", (event) => {
+            event.stopPropagation();
+            closeTabsFilterPopover();
+            toggleMessagePopover();
+        });
+        heroMenuTrigger.addEventListener("click", (event) => {
+            event.stopPropagation();
+            closeTabsFilterPopover();
+            toggleChannelMenuPopover();
+        });
+        tabsFilterTrigger.addEventListener("click", (event) => {
+            event.stopPropagation();
+            toggleTabsFilterPopover();
+        });
+        tabsFilterOptions.forEach((button) => {
+            button.addEventListener("click", () => {
+                activeFilterOption = button.dataset.filterOption;
+                syncTabsFilterSelection();
+                closeTabsFilterPopover();
+            });
+        });
+        messageTabButtons.forEach((button) => {
+            button.addEventListener("click", () => {
+                setMessageTab(button.dataset.messageTab);
+            });
+        });
+        window.addEventListener("scroll", syncTopRegionState, { passive: true });
+        window.addEventListener("load", syncTopRegionState);
+        window.addEventListener("resize", () => {
+            syncTopRegionState();
+            if (!channelMenuPopover.classList.contains("hidden")) {
+                positionChannelMenuPopover();
+            }
+        });
+        [channelTopInner, channelHero, channelUpperRow, composerCollapsed, composerExpanded].forEach((element) => {
+            if (element) {
+                element.addEventListener("transitionend", syncTopRegionState);
+            }
+        });
+        document.querySelectorAll("img").forEach((image) => {
+            if (!image.complete) {
+                image.addEventListener("load", syncTopRegionState, { once: true });
+            }
+        });
+        if (document.fonts && document.fonts.ready) {
+            document.fonts.ready.then(syncTopRegionState);
+        }
+        document.addEventListener("click", (event) => {
+            if (!channelMenuPopover.classList.contains("hidden")) {
+                if (!event.target.closest("#channel-menu-popover") && !event.target.closest("#hero-menu-trigger")) {
+                    closeChannelMenuPopover();
+                }
+            }
+            if (!tabsFilterPopover.classList.contains("hidden")) {
+                if (!event.target.closest("#tabs-filter-popover") && !event.target.closest("#tabs-filter-trigger")) {
+                    closeTabsFilterPopover();
+                }
+            }
+            if (!messagePopover.classList.contains("hidden")) {
+                if (event.target.closest("#message-popover")) {
+                    return;
+                }
+                if (event.target.closest("#hero-message-trigger")) {
+                    return;
+                }
+                closeMessagePopover();
+            }
+        });
+        document.addEventListener("keydown", (event) => {
+            if (event.key === "Escape") {
+                closeMessagePopover();
+                closeChannelMenuPopover();
+                closeTabsFilterPopover();
+            }
+        });
+        showCollapsedComposer();
+        syncTabsFilterSelection();
+        setMessageTab("interactive");
+        closeMessagePopover();
+        closeChannelMenuPopover();
+        closeTabsFilterPopover();
+        syncTopRegionState();
+    </script>
+</body></html>
