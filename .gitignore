@@ -1,0 +1,8 @@
+.DS_Store
+node_modules/
+apps/channel-web/dist/
+dist/
+supabase/.temp/
+.env.local
+.env.*.local
+.vercel/

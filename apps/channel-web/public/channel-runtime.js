@@ -1,0 +1,1 @@
+window.channelRuntimeConfig = window.channelRuntimeConfig || {};
