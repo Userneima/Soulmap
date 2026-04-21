@@ -153,10 +153,14 @@ export const createComposerActions = ({ store, dataService, showToast, feedActio
 
         try {
             const nextProfile = generateAnonymousPersona(`${activeAliasKey}-${Date.now()}`);
-            const profiles = await dataService.updateAliasProfile(activeAliasKey, nextProfile);
+            const nextAliasState = await dataService.createAliasProfile(activeAliasKey, nextProfile);
             store.dispatch({
                 type: "runtime/set-alias-profiles",
-                payload: { profiles }
+                payload: { profiles: nextAliasState.profiles }
+            });
+            store.dispatch({
+                type: "runtime/set-alias-key",
+                payload: { key: nextAliasState.activeAliasKey }
             });
             showToast({
                 tone: "success",

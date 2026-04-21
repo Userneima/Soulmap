@@ -6,16 +6,20 @@ const channelMemberCacheTtl = 10 * 60 * 1000;
 
 const channelSelectFields = "id, slug, name, description, created_by, preview_visibility, join_policy";
 const identitySelectFields = "id, channel_id, user_id, display_name, avatar_url, role";
-const aliasSelectFields = "id, slot_key, display_name, avatar_url, status";
+const aliasSelectFields = "id, slot_key, display_name, avatar_url, status, last_used_at, created_at";
 const joinRequestSelectFields = "id, channel_id, user_id, status, message, review_note, reviewed_by, reviewed_at, created_at, updated_at";
 const commentSelectFields = `
     id,
     body,
     likes_count,
     parent_comment_id,
+    deleted_at,
+    deleted_by,
+    deleted_snapshot,
     created_at,
     identity:identities!comments_identity_id_fkey (
         id,
+        user_id,
         display_name,
         avatar_url,
         role
@@ -27,6 +31,7 @@ const commentSelectFields = `
         avatar_url,
         identity:identities!alias_sessions_identity_id_fkey (
             id,
+            user_id,
             display_name,
             avatar_url,
             role
@@ -39,6 +44,7 @@ const legacyCommentSelectFields = `
     created_at,
     identity:identities!comments_identity_id_fkey (
         id,
+        user_id,
         display_name,
         avatar_url,
         role
@@ -50,6 +56,7 @@ const legacyCommentSelectFields = `
         avatar_url,
         identity:identities!alias_sessions_identity_id_fkey (
             id,
+            user_id,
             display_name,
             avatar_url,
             role
@@ -65,9 +72,13 @@ const postSelectFields = `
     views_count,
     likes_count,
     shares_count,
+    deleted_at,
+    deleted_by,
+    deleted_snapshot,
     created_at,
     identity:identities!posts_identity_id_fkey (
         id,
+        user_id,
         display_name,
         avatar_url,
         role
@@ -79,6 +90,7 @@ const postSelectFields = `
         avatar_url,
         identity:identities!alias_sessions_identity_id_fkey (
             id,
+            user_id,
             display_name,
             avatar_url,
             role
@@ -98,6 +110,7 @@ const legacyPostSelectFields = `
     created_at,
     identity:identities!posts_identity_id_fkey (
         id,
+        user_id,
         display_name,
         avatar_url,
         role
@@ -109,6 +122,7 @@ const legacyPostSelectFields = `
         avatar_url,
         identity:identities!alias_sessions_identity_id_fkey (
             id,
+            user_id,
             display_name,
             avatar_url,
             role
@@ -183,7 +197,9 @@ const isSchemaCompatibilityError = (error) => {
         || message.includes("schema cache")
         || message.includes("could not find the")
         || message.includes("likes_count")
-        || message.includes("parent_comment_id");
+        || message.includes("parent_comment_id")
+        || message.includes("deleted_at")
+        || message.includes("deleted_snapshot");
 };
 
 const getFallbackAuthor = (type) => ({
@@ -203,22 +219,30 @@ const getAdminRevealIdentity = (aliasSession) => aliasSession?.identity
 
 const normalizeCommentRow = (commentRow) => {
     const author = commentRow.identity || commentRow.alias_session || getFallbackAuthor(commentRow.alias_session ? "alias" : "identity");
+    const isDeleted = Boolean(commentRow.deleted_at);
     return {
         id: commentRow.id,
         authorName: author.display_name || "频道成员",
         authorAvatar: author.avatar_url || "",
+        authorUserId: author.user_id || author.identity?.user_id || null,
         isAnonymous: !commentRow.identity,
         createdAt: commentRow.created_at,
         timeLabel: getRelativeTimeLabel(commentRow.created_at),
-        likes: commentRow.likes_count || 0,
+        likes: isDeleted ? 0 : (commentRow.likes_count || 0),
         parentCommentId: commentRow.parent_comment_id || null,
-        text: commentRow.body,
+        text: isDeleted ? "该评论已删除" : commentRow.body,
+        isDeleted,
+        deletedAt: commentRow.deleted_at || null,
+        deletedBy: commentRow.deleted_by || null,
+        deletedByModerator: Boolean(commentRow.deleted_snapshot?.deleted_by_moderator),
+        deletedLabel: isDeleted ? "该评论已删除" : "",
         adminRevealIdentity: getAdminRevealIdentity(commentRow.alias_session)
     };
 };
 
 const normalizePostRow = (postRow) => {
     const author = postRow.identity || postRow.alias_session || getFallbackAuthor(postRow.alias_session ? "alias" : "identity");
+    const isDeleted = Boolean(postRow.deleted_at);
     const comments = [...(postRow.comments || [])]
         .sort((left, right) => Date.parse(left.created_at) - Date.parse(right.created_at))
         .map(normalizeCommentRow);
@@ -227,18 +251,24 @@ const normalizePostRow = (postRow) => {
         id: postRow.id,
         authorName: author.display_name || "频道成员",
         authorAvatar: author.avatar_url || "",
-        text: postRow.body,
-        images: [...(postRow.media || [])],
+        authorUserId: author.user_id || author.identity?.user_id || null,
+        text: isDeleted ? "该帖子已删除" : postRow.body,
+        images: isDeleted ? [] : [...(postRow.media || [])],
         board: postRow.board_slug || "none",
         isAnonymous: !postRow.identity,
+        isDeleted,
+        deletedAt: postRow.deleted_at || null,
+        deletedBy: postRow.deleted_by || null,
+        deletedByModerator: Boolean(postRow.deleted_snapshot?.deleted_by_moderator),
+        deletedLabel: isDeleted ? "该帖子已删除" : "",
         role: postRow.identity?.role || postRow.alias_session?.identity?.role || "member",
         timeLabel: getRelativeTimeLabel(postRow.created_at),
         dateLabel: postRow.created_at.slice(0, 10),
         views: postRow.views_count,
-        likes: postRow.likes_count,
-        shares: postRow.shares_count,
+        likes: isDeleted ? 0 : postRow.likes_count,
+        shares: isDeleted ? 0 : postRow.shares_count,
         comments,
-        aiDisclosure: postRow.ai_disclosure || "none",
+        aiDisclosure: isDeleted ? "none" : (postRow.ai_disclosure || "none"),
         adminRevealIdentity: getAdminRevealIdentity(postRow.alias_session)
     };
 };
@@ -578,17 +608,41 @@ export const createChannelDataService = () => {
     };
 
     const mapAliasProfiles = (aliasRows) => {
-        const aliasByKey = new Map((aliasRows || []).map((alias) => [alias.slot_key, alias]));
-        return defaultAnonymousProfiles.map((profile) => {
-            const alias = aliasByKey.get(profile.key);
-            return {
-                id: alias?.id || null,
+        const normalizedRows = [...(aliasRows || [])]
+            .sort((left, right) => {
+                const statusWeight = (right.status === "active") - (left.status === "active");
+                if (statusWeight !== 0) {
+                    return statusWeight;
+                }
+
+                const rightTime = Date.parse(right.last_used_at || right.created_at || 0);
+                const leftTime = Date.parse(left.last_used_at || left.created_at || 0);
+                return rightTime - leftTime;
+            });
+
+        if (!normalizedRows.length) {
+            return defaultAnonymousProfiles.map((profile) => ({
+                id: null,
                 key: profile.key,
-                name: alias?.display_name || profile.name,
-                avatar: alias?.avatar_url || profile.avatar
+                name: profile.name,
+                avatar: profile.avatar,
+                status: "active"
+            }));
+        }
+
+        return normalizedRows.map((alias, index) => {
+            const fallbackProfile = defaultAnonymousProfiles[index % defaultAnonymousProfiles.length];
+            return {
+                id: alias.id || null,
+                key: alias.slot_key,
+                name: alias.display_name || fallbackProfile.name,
+                avatar: alias.avatar_url || fallbackProfile.avatar,
+                status: alias.status || "active"
             };
         });
     };
+
+    const createAliasSlotKey = () => `slot-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 
     const getCurrentMembership = async (channelId) => {
         const client = getSupabaseClient();
@@ -797,7 +851,7 @@ export const createChannelDataService = () => {
                 role: identity.role
             },
             anonymousProfiles: runtimeState.aliasProfiles,
-            activeAliasKey: runtimeState.aliasProfiles.find((profile) => profile.id)?.key
+            activeAliasKey: runtimeState.aliasProfiles.find((profile) => profile.status === "active" && profile.id)?.key
                 || runtimeState.aliasProfiles[0]?.key
                 || defaultAnonymousProfiles[0]?.key
                 || null
@@ -1361,39 +1415,62 @@ export const createChannelDataService = () => {
         async anonymizeAnonymousDraft(input) {
             return tryInvokeAnonymousAnonymizer(input);
         },
-        async updateAliasProfile(aliasKey, profile) {
+        async createAliasProfile(aliasKey, profile) {
             const client = getSupabaseClient();
             const aliasProfile = runtimeState.aliasProfiles.find((item) => item.key === aliasKey);
-            if (!aliasProfile?.id) {
+            if (!runtimeState.identity?.id || !runtimeState.channel?.id) {
                 throw new Error("匿名马甲尚未初始化完成。");
             }
 
-            const { data, error } = await client
+            if (aliasProfile?.id) {
+                const retireResponse = await client
+                    .from("alias_sessions")
+                    .update({
+                        status: "retired",
+                        last_used_at: new Date().toISOString()
+                    })
+                    .eq("id", aliasProfile.id);
+
+                if (retireResponse.error) {
+                    throw retireResponse.error;
+                }
+            }
+
+            const nextSlotKey = createAliasSlotKey();
+            const { error: insertError } = await client
                 .from("alias_sessions")
-                .update({
+                .insert({
+                    channel_id: runtimeState.channel.id,
+                    identity_id: runtimeState.identity.id,
+                    slot_key: nextSlotKey,
                     display_name: profile.name,
                     avatar_url: profile.avatar,
+                    status: "active",
                     last_used_at: new Date().toISOString()
                 })
-                .eq("id", aliasProfile.id)
                 .select(aliasSelectFields)
                 .single();
 
-            if (error) {
-                throw error;
+            if (insertError) {
+                throw insertError;
             }
 
-            runtimeState.aliasProfiles = runtimeState.aliasProfiles.map((item) => (
-                item.key === aliasKey
-                    ? {
-                        ...item,
-                        name: data.display_name || profile.name,
-                        avatar: data.avatar_url || profile.avatar
-                    }
-                    : item
-            ));
+            const { data: aliasRows, error: listError } = await client
+                .from("alias_sessions")
+                .select(aliasSelectFields)
+                .eq("channel_id", runtimeState.channel.id)
+                .eq("identity_id", runtimeState.identity.id)
+                .order("last_used_at", { ascending: false });
 
-            return runtimeState.aliasProfiles.map((item) => ({ ...item }));
+            if (listError) {
+                throw listError;
+            }
+
+            runtimeState.aliasProfiles = mapAliasProfiles(aliasRows || []);
+            return {
+                profiles: runtimeState.aliasProfiles.map((item) => ({ ...item })),
+                activeAliasKey: nextSlotKey
+            };
         },
         async likePost(postId) {
             const client = getSupabaseClient();
@@ -1422,6 +1499,40 @@ export const createChannelDataService = () => {
                 postCache.delete(postId);
             }
             return Number(data || 0);
+        },
+        async deletePost(postId) {
+            const client = getSupabaseClient();
+            const { data, error } = await client.rpc("soft_delete_post", {
+                target_post_id: postId
+            });
+
+            if (error) {
+                throw error;
+            }
+
+            const result = Array.isArray(data) ? data[0] || {} : data || {};
+            const targetPostId = result.post_id || postId;
+            postCache.delete(targetPostId);
+            return this.getPost(targetPostId);
+        },
+        async deleteComment(commentId) {
+            const client = getSupabaseClient();
+            const { data, error } = await client.rpc("soft_delete_comment", {
+                target_comment_id: commentId
+            });
+
+            if (error) {
+                throw error;
+            }
+
+            const result = Array.isArray(data) ? data[0] || {} : data || {};
+            const targetPostId = result.post_id || null;
+            if (!targetPostId) {
+                throw new Error("删除评论后无法定位所属帖子。");
+            }
+
+            postCache.delete(targetPostId);
+            return this.getPost(targetPostId);
         },
         async updateIdentity(input) {
             const client = getSupabaseClient();
