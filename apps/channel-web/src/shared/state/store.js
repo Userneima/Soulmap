@@ -51,6 +51,7 @@ export const createInitialState = () => ({
         likedPostIds: []
     },
     composerState: {
+        expanded: false,
         draftText: "",
         images: [],
         nextImageId: 1,
@@ -58,6 +59,7 @@ export const createInitialState = () => ({
         board: "none",
         anonymousMode: false,
         autoRotate: false,
+        aiImageReshape: false,
         submitStatus: "idle",
         error: null,
         mentionOpen: false,
@@ -73,7 +75,10 @@ export const createInitialState = () => ({
             status: "idle",
             error: null,
             sort: "hot",
+            likedCommentIds: [],
+            replyTarget: null,
             draftText: "",
+            anonymousMode: false,
             submitStatus: "idle",
             initialFocusTarget: null
         },
@@ -111,7 +116,8 @@ export const createInitialState = () => ({
         sidebarOpen: false,
         topRegion: "expanded",
         accountMenuOpen: false,
-        searchFocusNonce: 0
+        searchFocusNonce: 0,
+        adminRevealAnonymous: false
     }
 });
 
@@ -151,6 +157,8 @@ const cloneState = (state) => ({
     overlayState: {
         comments: {
             ...state.overlayState.comments,
+            likedCommentIds: [...state.overlayState.comments.likedCommentIds],
+            replyTarget: cloneSimple(state.overlayState.comments.replyTarget),
             post: state.overlayState.comments.post
                 ? {
                     ...state.overlayState.comments.post,
@@ -172,8 +180,10 @@ const resetMemberRuntime = (draft) => {
     draft.runtimeState.realIdentity = { ...defaultRealIdentity };
     draft.runtimeState.anonymousProfiles = defaultAnonymousProfiles.map((profile) => ({ ...profile }));
     draft.runtimeState.activeAliasKey = firstAliasKey;
+    draft.composerState.expanded = false;
     draft.composerState.anonymousMode = false;
     draft.composerState.autoRotate = false;
+    draft.composerState.aiImageReshape = false;
 };
 
 const applyAction = (draft, action) => {
@@ -222,6 +232,12 @@ const applyAction = (draft, action) => {
         return;
     case "runtime/set-alias-key":
         draft.runtimeState.activeAliasKey = action.payload.key;
+        return;
+    case "runtime/set-alias-profiles":
+        draft.runtimeState.anonymousProfiles = action.payload.profiles.map((profile) => ({ ...profile }));
+        if (!draft.runtimeState.anonymousProfiles.some((profile) => profile.key === draft.runtimeState.activeAliasKey)) {
+            draft.runtimeState.activeAliasKey = draft.runtimeState.anonymousProfiles[0]?.key || null;
+        }
         return;
     case "runtime/update-identity":
         draft.runtimeState.realIdentity = { ...draft.runtimeState.realIdentity, ...action.payload.identity };
@@ -325,18 +341,28 @@ const applyAction = (draft, action) => {
     case "composer/set-field":
         Object.assign(draft.composerState, action.payload);
         return;
+    case "composer/expand":
+        draft.composerState.expanded = true;
+        return;
+    case "composer/collapse":
+        draft.composerState.expanded = false;
+        draft.composerState.aiDisclosureOpen = false;
+        return;
     case "composer/add-images":
         draft.composerState.images.push(...action.payload.images.map((image) => ({ ...image })));
         draft.composerState.nextImageId = action.payload.nextImageId;
+        draft.composerState.expanded = true;
         return;
     case "composer/remove-image":
         draft.composerState.images = draft.composerState.images.filter((image) => image.id !== action.payload.id);
         return;
     case "composer/reset":
+        draft.composerState.expanded = false;
         draft.composerState.draftText = "";
         draft.composerState.images = [];
         draft.composerState.aiDisclosure = "none";
         draft.composerState.board = "none";
+        draft.composerState.aiImageReshape = false;
         draft.composerState.submitStatus = "idle";
         draft.composerState.error = null;
         draft.composerState.mentionOpen = false;
@@ -350,6 +376,7 @@ const applyAction = (draft, action) => {
             draft.composerState.aiDisclosureOpen = false;
         } else {
             draft.composerState.autoRotate = false;
+            draft.composerState.aiImageReshape = false;
         }
         return;
     case "composer/submit-start":
@@ -368,7 +395,10 @@ const applyAction = (draft, action) => {
         draft.overlayState.comments.status = "loading";
         draft.overlayState.comments.error = null;
         draft.overlayState.comments.post = null;
+        draft.overlayState.comments.likedCommentIds = [];
+        draft.overlayState.comments.replyTarget = null;
         draft.overlayState.comments.draftText = "";
+        draft.overlayState.comments.anonymousMode = false;
         draft.overlayState.comments.submitStatus = "idle";
         return;
     case "comments/close":
@@ -380,6 +410,9 @@ const applyAction = (draft, action) => {
         draft.overlayState.comments.status = "idle";
         draft.overlayState.comments.error = null;
         draft.overlayState.comments.draftText = "";
+        draft.overlayState.comments.likedCommentIds = [];
+        draft.overlayState.comments.replyTarget = null;
+        draft.overlayState.comments.anonymousMode = false;
         draft.overlayState.comments.submitStatus = "idle";
         return;
     case "comments/load-success":
@@ -395,6 +428,21 @@ const applyAction = (draft, action) => {
     case "comments/set-field":
         Object.assign(draft.overlayState.comments, action.payload);
         return;
+    case "comments/like":
+        if (!draft.overlayState.comments.likedCommentIds.includes(action.payload.commentId)) {
+            draft.overlayState.comments.likedCommentIds.push(action.payload.commentId);
+        }
+        if (draft.overlayState.comments.post) {
+            draft.overlayState.comments.post = {
+                ...draft.overlayState.comments.post,
+                comments: draft.overlayState.comments.post.comments.map((comment) => (
+                    comment.id === action.payload.commentId
+                        ? { ...comment, likes: action.payload.likes ?? ((comment.likes || 0) + 1) }
+                        : comment
+                ))
+            };
+        }
+        return;
     case "comments/submit-start":
         draft.overlayState.comments.submitStatus = "submitting";
         return;
@@ -402,6 +450,7 @@ const applyAction = (draft, action) => {
         draft.overlayState.comments.submitStatus = "idle";
         if (action.payload?.clearDraft) {
             draft.overlayState.comments.draftText = "";
+            draft.overlayState.comments.replyTarget = null;
         }
         return;
     case "channel-menu/open":
@@ -492,7 +541,9 @@ const applyAction = (draft, action) => {
         return;
     case "ui/request-search-focus":
         draft.uiState.searchFocusNonce += 1;
-        draft.uiState.sidebarOpen = true;
+        return;
+    case "ui/toggle-admin-reveal-anonymous":
+        draft.uiState.adminRevealAnonymous = !draft.uiState.adminRevealAnonymous;
         return;
     default:
         return;

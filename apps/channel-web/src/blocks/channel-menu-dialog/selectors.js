@@ -2,7 +2,7 @@ import { channelShellConfig } from "../../entities/channel/config.js";
 
 const DESKTOP_BREAKPOINT = 720;
 const CHANNEL_MENU_WIDTH = 314;
-const CHANNEL_MENU_HEIGHT = 284;
+const CHANNEL_MENU_HEIGHT = 338;
 const VIEWPORT_MARGIN = 12;
 
 const getChannelMenuPanelStyle = (overlayState) => {
@@ -32,5 +32,7 @@ export const selectChannelMenuDialogVM = (state) => ({
     channelSlug: state.runtimeState.channel?.slug || "",
     logoUrl: channelShellConfig.channelLogo,
     identityName: state.runtimeState.realIdentity.name,
-    identityAvatar: state.runtimeState.realIdentity.avatar
+    identityAvatar: state.runtimeState.realIdentity.avatar,
+    canManageAnonymous: ["owner", "admin"].includes(state.runtimeState.realIdentity.role),
+    adminRevealAnonymous: state.uiState.adminRevealAnonymous
 });

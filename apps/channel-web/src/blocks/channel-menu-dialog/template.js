@@ -31,6 +31,16 @@ export const channelMenuDialogTemplate = (vm) => `
         suffix: vm.identityName,
         avatar: vm.identityAvatar
     })}
+                ${vm.canManageAnonymous ? `
+                    <button class="channel-menu-dialog__row" data-channel-menu-action="toggle-anonymous-reveal" type="button">
+                        <span class="channel-menu-dialog__row-label">匿名管理视角</span>
+                        <span class="channel-menu-dialog__row-tail">
+                            <span class="channel-menu-dialog__toggle ${vm.adminRevealAnonymous ? "is-active" : ""}">
+                                <span class="channel-menu-dialog__toggle-thumb"></span>
+                            </span>
+                        </span>
+                    </button>
+                ` : ""}
                 ${buildMenuRow({
         action: "channel-management",
         label: "频道管理"

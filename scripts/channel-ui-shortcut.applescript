@@ -12,15 +12,11 @@ on run
     end if
 
     try
-        set serverReachable to my isChannelServerReachable()
-
-        if not serverReachable then
-            do shell script "/bin/zsh -lc " & quoted form of ("cd " & quoted form of projectDir & " && nohup npm run dev:web >/tmp/channel-ui.log 2>&1 &")
-            set serverReachable to my waitForChannelServer()
-        end if
+        my restartChannelServer()
+        set serverReachable to my waitForChannelServer()
 
         if serverReachable then
-            do shell script "/usr/bin/open " & quoted form of appUrl
+            do shell script "/usr/bin/open " & quoted form of (my buildFreshAppUrl())
             return
         end if
 
@@ -29,6 +25,18 @@ on run
         display dialog "无法打开 Channel UI：" & return & errMsg & " (" & errNum & ")" buttons {"好"} default button 1 with icon stop
     end try
 end run
+
+on restartChannelServer()
+    set restartCommand to "existingPids=$(/usr/sbin/lsof -ti tcp:43173 2>/dev/null || true); " & ¬
+        "if [ -n \"$existingPids\" ]; then kill $existingPids 2>/dev/null || true; sleep 1; fi; " & ¬
+        "cd " & quoted form of projectDir & " && nohup npm run dev:web >/tmp/channel-ui.log 2>&1 &"
+    do shell script "/bin/zsh -lc " & quoted form of restartCommand
+end restartChannelServer
+
+on buildFreshAppUrl()
+    set cacheBuster to do shell script "/bin/date +%s"
+    return appUrl & "?reload=" & cacheBuster
+end buildFreshAppUrl
 
 on isChannelServerReachable()
     try

@@ -17,6 +17,7 @@ describe("channel view model selectors", () => {
         state.composerState.images = [{ id: 1, name: "cover.png", url: "blob:test" }];
         state.composerState.anonymousMode = true;
         state.composerState.autoRotate = true;
+        state.composerState.aiImageReshape = true;
 
         const vm = selectComposerPanelVM(state);
 
@@ -26,6 +27,7 @@ describe("channel view model selectors", () => {
         expect(vm.canSubmit).toBe(true);
         expect(vm.images).toHaveLength(1);
         expect(vm.autoRotate).toBe(true);
+        expect(vm.aiImageReshape).toBe(true);
     });
 
     it("maps guest viewer into composer gate vm", () => {
@@ -120,6 +122,53 @@ describe("channel view model selectors", () => {
         expect(vm.comments[0].id).toBe("b");
         expect(vm.canSend).toBe(false);
         expect(vm.accessHint).toContain("登录");
+    });
+
+    it("sorts hot comments by likes and exposes liked and reply state", () => {
+        const state = createInitialState();
+        state.authState.status = "authenticated";
+        state.membershipState.status = "approved";
+        state.overlayState.comments.open = true;
+        state.overlayState.comments.status = "ready";
+        state.overlayState.comments.sort = "hot";
+        state.overlayState.comments.likedCommentIds = ["b"];
+        state.overlayState.comments.replyTarget = { id: "b", authorName: "北桥" };
+        state.overlayState.comments.post = {
+            id: "post-1",
+            comments: [
+                { id: "a", text: "第一条", likes: 1 },
+                { id: "b", text: "第二条", likes: 3 }
+            ]
+        };
+
+        const vm = selectCommentDrawerVM(state);
+        expect(vm.comments[0].id).toBe("b");
+        expect(vm.comments[0].isLiked).toBe(true);
+        expect(vm.comments[0].floorLabel).toBe("2L");
+        expect(vm.replyTarget.authorName).toBe("北桥");
+    });
+
+    it("renders reply comments as threaded items under their parent", () => {
+        const state = createInitialState();
+        state.authState.status = "authenticated";
+        state.membershipState.status = "approved";
+        state.overlayState.comments.open = true;
+        state.overlayState.comments.status = "ready";
+        state.overlayState.comments.sort = "latest";
+        state.overlayState.comments.post = {
+            id: "post-1",
+            comments: [
+                { id: "a", authorName: "海屿", text: "第一条", createdAt: "2026-04-20T10:00:00.000Z", likes: 0, parentCommentId: null },
+                { id: "b", authorName: "章鱼烧", text: "回复内容", createdAt: "2026-04-20T11:00:00.000Z", likes: 0, parentCommentId: "a" },
+                { id: "c", authorName: "北桥", text: "另一条根评论", createdAt: "2026-04-20T12:00:00.000Z", likes: 2, parentCommentId: null }
+            ]
+        };
+
+        const vm = selectCommentDrawerVM(state);
+        expect(vm.comments.map((comment) => comment.id)).toEqual(["c", "a", "b"]);
+        expect(vm.comments[2].replyDepth).toBe(1);
+        expect(vm.comments[2].replyTargetAuthorName).toBe("海屿");
+        expect(vm.comments[2].replyTargetPreview).toBe("第一条");
     });
 
     it("exposes comment drawer source and focus target", () => {

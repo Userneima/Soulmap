@@ -5,6 +5,75 @@ export const escapeHtml = (value) => String(value ?? "")
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&#39;");
 
+const anonymousNamePrefixes = [
+    "雾", "岚", "栖", "舟", "川", "汀", "野", "弦",
+    "澄", "暮", "云", "白", "青", "鹿", "松", "迟"
+];
+
+const anonymousNameSuffixes = [
+    "桥", "屿", "川", "汐", "禾", "野", "岚", "序",
+    "音", "栈", "林", "澜", "舟", "雨", "歌", "隼"
+];
+
+const anonymousPalette = [
+    ["#3b82f6", "#22c55e", "#0f172a"],
+    ["#f97316", "#ef4444", "#1f2937"],
+    ["#06b6d4", "#8b5cf6", "#111827"],
+    ["#22c55e", "#eab308", "#17202a"],
+    ["#ec4899", "#8b5cf6", "#1f1b2e"],
+    ["#38bdf8", "#0ea5e9", "#0f172a"],
+    ["#f59e0b", "#fb7185", "#241b15"],
+    ["#a3e635", "#14b8a6", "#10231e"]
+];
+
+const toSeedNumber = (seed) => {
+    const source = String(seed ?? `${Date.now()}-${Math.random()}`);
+    let hash = 0;
+    for (let index = 0; index < source.length; index += 1) {
+        hash = ((hash << 5) - hash) + source.charCodeAt(index);
+        hash |= 0;
+    }
+    return Math.abs(hash);
+};
+
+const pickSeeded = (items, seedNumber, offset = 0) => items[(seedNumber + offset) % items.length];
+
+const createAnonymousAvatar = (name, seed) => {
+    const seedNumber = toSeedNumber(seed);
+    const [primary, secondary, base] = pickSeeded(anonymousPalette, seedNumber);
+    const accentX = 28 + (seedNumber % 28);
+    const accentY = 24 + (seedNumber % 24);
+    const orbitOffset = 8 + (seedNumber % 18);
+    const monogram = Array.from(String(name || "匿名")).slice(-1)[0] || "匿";
+
+    const svg = `
+        <svg xmlns="http://www.w3.org/2000/svg" width="96" height="96" viewBox="0 0 96 96" fill="none">
+            <defs>
+                <linearGradient id="bg" x1="8" y1="8" x2="88" y2="88" gradientUnits="userSpaceOnUse">
+                    <stop stop-color="${primary}" />
+                    <stop offset="1" stop-color="${secondary}" />
+                </linearGradient>
+            </defs>
+            <rect width="96" height="96" rx="48" fill="${base}" />
+            <circle cx="48" cy="48" r="38" fill="url(#bg)" opacity="0.92" />
+            <circle cx="${accentX}" cy="${accentY}" r="12" fill="rgba(255,255,255,0.2)" />
+            <path d="M20 ${60 + orbitOffset}C31 ${46 + orbitOffset} 46 ${42 + orbitOffset} 68 ${26 + orbitOffset}" stroke="rgba(255,255,255,0.26)" stroke-width="5" stroke-linecap="round"/>
+            <text x="48" y="56" text-anchor="middle" font-size="30" font-weight="700" fill="white" font-family="Arial, sans-serif">${monogram}</text>
+        </svg>
+    `.trim();
+
+    return `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`;
+};
+
+export const generateAnonymousPersona = (seed = `${Date.now()}-${Math.random()}`) => {
+    const seedNumber = toSeedNumber(seed);
+    const name = `${pickSeeded(anonymousNamePrefixes, seedNumber)}${pickSeeded(anonymousNameSuffixes, seedNumber, 7)}`;
+    return {
+        name,
+        avatar: createAnonymousAvatar(name, seed)
+    };
+};
+
 export const formatComposerTextForPost = (text) => escapeHtml(text)
     .replace(/(@[^\s@]+)/g, '<span class="text-accent">$1</span>')
     .replace(/\n/g, "<br/>");
@@ -44,18 +113,24 @@ export const readBlobAsDataUrl = (blob) => new Promise((resolve, reject) => {
 });
 
 export const anonymizeComposerText = (rawText) => rawText
+    .replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi, "[邮箱已隐藏]")
+    .replace(/(?<!\d)1\d{10}(?!\d)/g, "[手机号已隐藏]")
+    .replace(/(微信|vx|VX|vx号|微信号)[:：]?\s*[a-zA-Z0-9_-]{5,}/g, "$1[已隐藏]")
+    .replace(/(QQ|qq|q号)[:：]?\s*\d{5,}/g, "$1[已隐藏]")
     .split("\n")
     .map((line) => line
         .replace(/我觉得/g, "换个角度看")
         .replace(/我认为/g, "更中性的看法是")
         .replace(/我想说/g, "想补充的是")
         .replace(/我想/g, "想")
+        .replace(/我是/g, "这里是")
         .replace(/我的/g, "相关")
         .replace(/我们/g, "大家")
         .replace(/我/g, "这边")
         .replace(/哈哈+/g, "哈哈")
         .replace(/[!！]{2,}/g, "！")
         .replace(/[?？]{2,}/g, "？")
+        .replace(/\s{2,}/g, " ")
     )
     .join("\n")
     .trim();
@@ -88,8 +163,11 @@ export const processAnonymousImageForPost = async (image) => {
     canvas.width = Math.max(1, Math.round(sourceWidth * scale));
     canvas.height = Math.max(1, Math.round(sourceHeight * scale));
     const context = canvas.getContext("2d");
-    context.filter = "blur(0.6px) saturate(0.94) contrast(1.02) brightness(1.01)";
+    context.filter = "blur(0.85px) saturate(0.92) contrast(1.01) brightness(1.01)";
     context.drawImage(sourceImage, cropX, cropY, sourceWidth, sourceHeight, 0, 0, canvas.width, canvas.height);
+    context.fillStyle = "rgba(18, 18, 18, 0.08)";
+    context.fillRect(0, 0, canvas.width, 10);
+    context.fillRect(0, canvas.height - 10, canvas.width, 10);
     const blob = await new Promise((resolve) => {
         canvas.toBlob(resolve, "image/jpeg", 0.92);
     });
@@ -152,7 +230,7 @@ export const getChannelActionErrorMessage = (action, error) => {
         return "数据已经存在，当前结果已保留。";
     }
 
-    if (code === "42703" || code === "42P01" || code === "42883" || code === "PGRST202") {
+    if (code === "42703" || code === "42P01" || code === "42883" || code === "PGRST202" || code === "PGRST204") {
         return "频道数据库还没完成升级，页面先按兼容模式打开。需要把最新 migration 应用到 Supabase。";
     }
 
@@ -189,6 +267,7 @@ export const getChannelActionErrorMessage = (action, error) => {
         upgrade_legacy_account: "账号升级失败，请稍后重试。",
         publish_post: "帖子发送失败，草稿还保留着，可以直接重试。",
         publish_comment: "评论发送失败，请稍后重试。",
+        like_comment: "评论点赞失败，请稍后重试。",
         update_identity: "昵称或头像保存失败，请稍后重试。",
         load_feed: "频道内容加载失败，请刷新或重试。",
         load_comments: "评论加载失败，请稍后重试。",

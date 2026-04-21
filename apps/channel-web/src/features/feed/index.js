@@ -1,4 +1,4 @@
-import { getChannelActionErrorMessage, getPostBodyText, copyText } from "../../shared/lib/helpers.js";
+import { anonymizeComposerText, copyText, getChannelActionErrorMessage, getPostBodyText } from "../../shared/lib/helpers.js";
 
 const requestInteractionAccess = ({ store, showToast }) => {
     const state = store.getState();
@@ -171,6 +171,71 @@ export const createFeedActions = ({ store, dataService, showToast }) => ({
             payload: { draftText }
         });
     },
+    async likeComment(commentId) {
+        if (!requestInteractionAccess({ store, showToast })) {
+            return;
+        }
+
+        const { likedCommentIds = [], postId } = store.getState().overlayState.comments;
+        if (likedCommentIds.includes(commentId)) {
+            showToast({
+                tone: "info",
+                message: "这条评论你已经点过赞了。"
+            });
+            return;
+        }
+
+        try {
+            const likes = await dataService.likeComment(commentId, postId);
+            store.dispatch({
+                type: "comments/like",
+                payload: { commentId, likes }
+            });
+        } catch (error) {
+            showToast({
+                tone: "error",
+                message: getChannelActionErrorMessage("like_comment", error)
+            });
+        }
+    },
+    replyToComment(comment) {
+        if (!requestInteractionAccess({ store, showToast })) {
+            return;
+        }
+
+        store.dispatch({
+            type: "comments/set-field",
+            payload: {
+                replyTarget: {
+                    id: comment.id,
+                    authorName: comment.authorName,
+                    text: comment.text || ""
+                },
+                draftText: ""
+            }
+        });
+    },
+    clearCommentReplyTarget() {
+        store.dispatch({
+            type: "comments/set-field",
+            payload: {
+                replyTarget: null
+            }
+        });
+    },
+    toggleCommentAnonymousMode() {
+        if (!requestInteractionAccess({ store, showToast })) {
+            return;
+        }
+
+        const current = store.getState().overlayState.comments.anonymousMode;
+        store.dispatch({
+            type: "comments/set-field",
+            payload: {
+                anonymousMode: !current
+            }
+        });
+    },
     async submitComment() {
         if (!requestInteractionAccess({ store, showToast })) {
             return;
@@ -179,6 +244,8 @@ export const createFeedActions = ({ store, dataService, showToast }) => ({
         const state = store.getState();
         const draftText = state.overlayState.comments.draftText.trim();
         const postId = state.overlayState.comments.postId;
+        const replyTarget = state.overlayState.comments.replyTarget;
+        const anonymousMode = state.overlayState.comments.anonymousMode;
         if (!draftText || !postId) {
             return;
         }
@@ -186,11 +253,21 @@ export const createFeedActions = ({ store, dataService, showToast }) => ({
         store.dispatch({ type: "comments/submit-start" });
 
         try {
+            const anonymizedDraft = anonymousMode
+                ? await dataService.anonymizeAnonymousDraft?.({
+                    text: draftText,
+                    purpose: "comment",
+                    channelId: state.runtimeState.channel?.id || null
+                })
+                : null;
+
             await dataService.publishComment({
                 postId,
-                body: draftText,
+                parentCommentId: replyTarget?.id || null,
+                body: anonymousMode ? (anonymizedDraft?.text || anonymizeComposerText(draftText)) : draftText,
                 author: {
-                    type: "identity"
+                    type: anonymousMode ? "alias_session" : "identity",
+                    key: anonymousMode ? state.runtimeState.activeAliasKey : undefined
                 }
             });
 
@@ -202,7 +279,7 @@ export const createFeedActions = ({ store, dataService, showToast }) => ({
             await this.refreshComments();
             showToast({
                 tone: "success",
-                message: "评论已发送。"
+                message: anonymousMode ? "匿名评论已发送。" : "评论已发送。"
             });
         } catch (error) {
             store.dispatch({

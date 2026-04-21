@@ -109,6 +109,9 @@ src/test/                    当前测试
 - Do not add unnecessary praise or padding
 - Point out problems directly
 - When the user asks for UI adjustments, do the full adjustment instead of ending with "next step" suggestions
+- 默认直接执行你判断为合理的下一步，不要停在“建议用户做什么”
+- 如果已经能安全继续，就直接检查、修改、重启、验证并汇报结果
+- 只有在高风险、不可逆、涉及权限/费用/删除数据时才停下来确认
 
 ### Execution
 - Understand the existing structure before editing
@@ -116,6 +119,9 @@ src/test/                    当前测试
 - Prefer the smallest effective change
 - Do not modify unrelated files
 - Validate after changes with the relevant build / test commands when applicable
+- 当用户目标从 UI 微调切到数据、模型、部署、权限、自动化等另一层级时，先重新锚定“这条消息真正要解决的问题”再执行，禁止沿用上一轮任务惯性
+- 回复前必须核对“本轮实际修改/检查的内容”是否对应“用户最后一条消息”，不要复用上一轮的完成话术
+- 如果本轮目标和上一轮不是同一个问题，汇报时必须明确说明当前完成的是哪一个目标，避免任务串台
 
 ### Editing Path
 - 改界面时，先看对应 `src/blocks/<block>/`

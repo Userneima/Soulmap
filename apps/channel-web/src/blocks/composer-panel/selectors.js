@@ -17,12 +17,12 @@ export const selectComposerPanelVM = (state) => {
     const activeAlias = state.runtimeState.anonymousProfiles.find((profile) => profile.key === state.runtimeState.activeAliasKey)
         || state.runtimeState.anonymousProfiles[0];
     const anonymousMode = state.composerState.anonymousMode;
+    const expanded = state.composerState.expanded;
     const draftText = state.composerState.draftText;
     const images = state.composerState.images;
     const authStatus = state.authState.status;
     const membershipStatus = state.membershipState.status;
     const canCompose = membershipStatus === "approved" && authStatus === "authenticated";
-
     const gateByState = authStatus === "guest"
         ? {
             accessMode: "guest",
@@ -57,6 +57,7 @@ export const selectComposerPanelVM = (state) => {
     return {
         capabilities: composerCapabilityRegistry,
         canCompose,
+        expanded,
         gate: canCompose ? null : gateByState,
         draftText,
         images,
@@ -67,6 +68,7 @@ export const selectComposerPanelVM = (state) => {
         selectedBoard: state.composerState.board,
         anonymousMode,
         autoRotate: state.composerState.autoRotate,
+        aiImageReshape: state.composerState.aiImageReshape,
         aiDisclosureOpen: state.composerState.aiDisclosureOpen,
         submitStatus: state.composerState.submitStatus,
         submitLabel: state.composerState.submitStatus === "submitting"
@@ -84,6 +86,15 @@ export const selectComposerPanelVM = (state) => {
                 name: state.runtimeState.realIdentity.name,
                 meta: state.runtimeState.realIdentity.meta
             },
-        placeholder: anonymousMode ? composerIdentityPresets.anonymousPlaceholder : composerIdentityPresets.defaultPlaceholder
+        placeholder: anonymousMode ? composerIdentityPresets.anonymousPlaceholder : composerIdentityPresets.defaultPlaceholder,
+        collapsedSummary: draftText.trim()
+            ? draftText.trim().slice(0, 72)
+            : images.length
+                ? `已添加 ${images.length} 张图片`
+                : anonymousMode
+                    ? "以匿名身份发布想法"
+                    : "分享频道里的新动态",
+        hasDraft: Boolean(draftText.trim() || images.length),
+        activeAlias
     };
 };

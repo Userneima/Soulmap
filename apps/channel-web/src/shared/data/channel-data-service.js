@@ -8,6 +8,54 @@ const channelSelectFields = "id, slug, name, description, created_by, preview_vi
 const identitySelectFields = "id, channel_id, user_id, display_name, avatar_url, role";
 const aliasSelectFields = "id, slot_key, display_name, avatar_url, status";
 const joinRequestSelectFields = "id, channel_id, user_id, status, message, review_note, reviewed_by, reviewed_at, created_at, updated_at";
+const commentSelectFields = `
+    id,
+    body,
+    likes_count,
+    parent_comment_id,
+    created_at,
+    identity:identities!comments_identity_id_fkey (
+        id,
+        display_name,
+        avatar_url,
+        role
+    ),
+    alias_session:alias_sessions!comments_alias_session_id_fkey (
+        id,
+        slot_key,
+        display_name,
+        avatar_url,
+        identity:identities!alias_sessions_identity_id_fkey (
+            id,
+            display_name,
+            avatar_url,
+            role
+        )
+    )
+`;
+const legacyCommentSelectFields = `
+    id,
+    body,
+    created_at,
+    identity:identities!comments_identity_id_fkey (
+        id,
+        display_name,
+        avatar_url,
+        role
+    ),
+    alias_session:alias_sessions!comments_alias_session_id_fkey (
+        id,
+        slot_key,
+        display_name,
+        avatar_url,
+        identity:identities!alias_sessions_identity_id_fkey (
+            id,
+            display_name,
+            avatar_url,
+            role
+        )
+    )
+`;
 const postSelectFields = `
     id,
     board_slug,
@@ -28,25 +76,45 @@ const postSelectFields = `
         id,
         slot_key,
         display_name,
-        avatar_url
-    ),
-    comments (
-        id,
-        body,
-        created_at,
-        identity:identities!comments_identity_id_fkey (
+        avatar_url,
+        identity:identities!alias_sessions_identity_id_fkey (
             id,
             display_name,
             avatar_url,
             role
-        ),
-        alias_session:alias_sessions!comments_alias_session_id_fkey (
-            id,
-            slot_key,
-            display_name,
-            avatar_url
         )
-    )
+    ),
+    comments (${commentSelectFields})
+`;
+const legacyPostSelectFields = `
+    id,
+    board_slug,
+    body,
+    media,
+    ai_disclosure,
+    views_count,
+    likes_count,
+    shares_count,
+    created_at,
+    identity:identities!posts_identity_id_fkey (
+        id,
+        display_name,
+        avatar_url,
+        role
+    ),
+    alias_session:alias_sessions!posts_alias_session_id_fkey (
+        id,
+        slot_key,
+        display_name,
+        avatar_url,
+        identity:identities!alias_sessions_identity_id_fkey (
+            id,
+            display_name,
+            avatar_url,
+            role
+        )
+    ),
+    comments (${legacyCommentSelectFields})
 `;
 
 const getRelativeTimeLabel = (timestamp) => {
@@ -109,7 +177,13 @@ const normalizeChannel = (channel) => ({
 
 const isSchemaCompatibilityError = (error) => {
     const code = String(error?.code || "");
-    return ["42703", "42P01", "42883", "PGRST202"].includes(code);
+    const message = String(error?.message || "").toLowerCase();
+    return ["42703", "42P01", "42883", "PGRST202", "PGRST204"].includes(code)
+        || message.includes("does not exist")
+        || message.includes("schema cache")
+        || message.includes("could not find the")
+        || message.includes("likes_count")
+        || message.includes("parent_comment_id");
 };
 
 const getFallbackAuthor = (type) => ({
@@ -118,14 +192,28 @@ const getFallbackAuthor = (type) => ({
     role: "member"
 });
 
+const getAdminRevealIdentity = (aliasSession) => aliasSession?.identity
+    ? {
+        id: aliasSession.identity.id,
+        name: aliasSession.identity.display_name || "频道成员",
+        avatar: aliasSession.identity.avatar_url || "",
+        role: aliasSession.identity.role || "member"
+    }
+    : null;
+
 const normalizeCommentRow = (commentRow) => {
     const author = commentRow.identity || commentRow.alias_session || getFallbackAuthor(commentRow.alias_session ? "alias" : "identity");
     return {
         id: commentRow.id,
         authorName: author.display_name || "频道成员",
         authorAvatar: author.avatar_url || "",
+        isAnonymous: !commentRow.identity,
+        createdAt: commentRow.created_at,
         timeLabel: getRelativeTimeLabel(commentRow.created_at),
-        text: commentRow.body
+        likes: commentRow.likes_count || 0,
+        parentCommentId: commentRow.parent_comment_id || null,
+        text: commentRow.body,
+        adminRevealIdentity: getAdminRevealIdentity(commentRow.alias_session)
     };
 };
 
@@ -143,14 +231,15 @@ const normalizePostRow = (postRow) => {
         images: [...(postRow.media || [])],
         board: postRow.board_slug || "none",
         isAnonymous: !postRow.identity,
-        role: postRow.identity?.role || "member",
+        role: postRow.identity?.role || postRow.alias_session?.identity?.role || "member",
         timeLabel: getRelativeTimeLabel(postRow.created_at),
         dateLabel: postRow.created_at.slice(0, 10),
         views: postRow.views_count,
         likes: postRow.likes_count,
         shares: postRow.shares_count,
         comments,
-        aiDisclosure: postRow.ai_disclosure || "none"
+        aiDisclosure: postRow.ai_disclosure || "none",
+        adminRevealIdentity: getAdminRevealIdentity(postRow.alias_session)
     };
 };
 
@@ -384,25 +473,91 @@ export const createChannelDataService = () => {
         return createdProfile;
     };
 
+    const tryInvokeAnonymousAnonymizer = async ({
+        text = "",
+        purpose = "post",
+        channelId = null,
+        images = [],
+        reshapeImages = false
+    }) => {
+        try {
+            const client = getSupabaseClient();
+            const normalizedText = String(text || "").trim();
+            const normalizedImages = Array.isArray(images)
+                ? images
+                    .map((image) => ({
+                        name: String(image?.name || ""),
+                        url: String(image?.url || "")
+                    }))
+                    .filter((image) => image.url.startsWith("data:image/"))
+                : [];
+
+            if (!normalizedText && !normalizedImages.length) {
+                return null;
+            }
+
+            const { data, error } = await client.functions.invoke("anonymous-anonymize", {
+                body: {
+                    text: normalizedText,
+                    purpose,
+                    channelId,
+                    images: normalizedImages,
+                    reshapeImages
+                }
+            });
+
+            if (error) {
+                return null;
+            }
+
+            if (typeof data?.text !== "string" || !data.text.trim()) {
+                return null;
+            }
+
+            return {
+                text: data.text.trim(),
+                provider: typeof data.provider === "string" ? data.provider : "ai",
+                images: Array.isArray(data?.images)
+                    ? data.images
+                        .map((image) => ({
+                            name: String(image?.name || ""),
+                            url: String(image?.url || "")
+                        }))
+                        .filter((image) => image.url.startsWith("data:image/"))
+                    : []
+            };
+        } catch {
+            return null;
+        }
+    };
+
     const fetchPosts = async (boardSlug = null) => {
         const client = getSupabaseClient();
         const channel = ensureLoadedChannel();
-        let query = client
-            .from("posts")
-            .select(postSelectFields)
-            .eq("channel_id", channel.id)
-            .order("created_at", { ascending: false });
+        const runQuery = (selectFields) => {
+            let query = client
+                .from("posts")
+                .select(selectFields)
+                .eq("channel_id", channel.id)
+                .order("created_at", { ascending: false });
 
-        if (boardSlug) {
-            query = query.eq("board_slug", boardSlug);
+            if (boardSlug) {
+                query = query.eq("board_slug", boardSlug);
+            }
+
+            return query;
+        };
+
+        let response = await runQuery(postSelectFields);
+        if (response.error && isSchemaCompatibilityError(response.error)) {
+            response = await runQuery(legacyPostSelectFields);
         }
 
-        const { data, error } = await query;
-        if (error) {
-            throw error;
+        if (response.error) {
+            throw response.error;
         }
 
-        return cachePosts((data || []).map(normalizePostRow));
+        return cachePosts((response.data || []).map(normalizePostRow));
     };
 
     const countPublicPosts = async (channelId) => {
@@ -1120,18 +1275,27 @@ export const createChannelDataService = () => {
             }
 
             const client = getSupabaseClient();
-            const { data, error } = await client
+            let response = await client
                 .from("posts")
                 .select(postSelectFields)
                 .eq("id", postId)
                 .eq("channel_id", runtimeState.channel.id)
                 .single();
 
-            if (error) {
-                throw error;
+            if (response.error && isSchemaCompatibilityError(response.error)) {
+                response = await client
+                    .from("posts")
+                    .select(legacyPostSelectFields)
+                    .eq("id", postId)
+                    .eq("channel_id", runtimeState.channel.id)
+                    .single();
             }
 
-            const post = normalizePostRow(data);
+            if (response.error) {
+                throw response.error;
+            }
+
+            const post = normalizePostRow(response.data);
             postCache.set(post.id, post);
             return post;
         },
@@ -1162,23 +1326,74 @@ export const createChannelDataService = () => {
             const client = getSupabaseClient();
             const channel = ensureLoadedChannel();
             const authorReference = getActorReference(input.author);
-            const { data, error } = await client
+            let response = await client
                 .from("comments")
                 .insert({
                     post_id: input.postId,
                     channel_id: channel.id,
+                    parent_comment_id: input.parentCommentId || null,
                     body: input.body,
                     ...authorReference
                 })
-                .select("id, body, created_at, identity:identities!comments_identity_id_fkey(id, display_name, avatar_url), alias_session:alias_sessions!comments_alias_session_id_fkey(id, display_name, avatar_url)")
+                .select(commentSelectFields)
+                .single();
+
+            if (response.error && isSchemaCompatibilityError(response.error)) {
+                response = await client
+                    .from("comments")
+                    .insert({
+                        post_id: input.postId,
+                        channel_id: channel.id,
+                        body: input.body,
+                        ...authorReference
+                    })
+                    .select(legacyCommentSelectFields)
+                    .single();
+            }
+
+            if (response.error) {
+                throw response.error;
+            }
+
+            postCache.delete(input.postId);
+            return normalizeCommentRow(response.data);
+        },
+        async anonymizeAnonymousDraft(input) {
+            return tryInvokeAnonymousAnonymizer(input);
+        },
+        async updateAliasProfile(aliasKey, profile) {
+            const client = getSupabaseClient();
+            const aliasProfile = runtimeState.aliasProfiles.find((item) => item.key === aliasKey);
+            if (!aliasProfile?.id) {
+                throw new Error("匿名马甲尚未初始化完成。");
+            }
+
+            const { data, error } = await client
+                .from("alias_sessions")
+                .update({
+                    display_name: profile.name,
+                    avatar_url: profile.avatar,
+                    last_used_at: new Date().toISOString()
+                })
+                .eq("id", aliasProfile.id)
+                .select(aliasSelectFields)
                 .single();
 
             if (error) {
                 throw error;
             }
 
-            postCache.delete(input.postId);
-            return normalizeCommentRow(data);
+            runtimeState.aliasProfiles = runtimeState.aliasProfiles.map((item) => (
+                item.key === aliasKey
+                    ? {
+                        ...item,
+                        name: data.display_name || profile.name,
+                        avatar: data.avatar_url || profile.avatar
+                    }
+                    : item
+            ));
+
+            return runtimeState.aliasProfiles.map((item) => ({ ...item }));
         },
         async likePost(postId) {
             const client = getSupabaseClient();
@@ -1191,6 +1406,21 @@ export const createChannelDataService = () => {
             }
 
             postCache.delete(postId);
+            return Number(data || 0);
+        },
+        async likeComment(commentId, postId) {
+            const client = getSupabaseClient();
+            const { data, error } = await client.rpc("increment_comment_like", {
+                target_comment_id: commentId
+            });
+
+            if (error) {
+                throw error;
+            }
+
+            if (postId) {
+                postCache.delete(postId);
+            }
             return Number(data || 0);
         },
         async updateIdentity(input) {

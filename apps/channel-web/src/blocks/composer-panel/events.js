@@ -28,12 +28,24 @@ export const attachComposerPanelEvents = ({ root, actions }) => {
             actions.openOverlay("identity");
             return;
         }
+        if (action === "expand") {
+            actions.expandComposer();
+            return;
+        }
+        if (action === "collapse") {
+            actions.collapseComposer();
+            return;
+        }
         if (action === "toggle-anonymous") {
             actions.toggleAnonymousMode();
             return;
         }
         if (action === "rotate-alias") {
             actions.rotateAliasProfile();
+            return;
+        }
+        if (action === "regenerate-alias") {
+            void actions.regenerateAliasProfile();
             return;
         }
         if (action === "toggle-ai-disclosure") {
@@ -82,6 +94,11 @@ export const attachComposerPanelEvents = ({ root, actions }) => {
 
         if (target.matches("[data-ref='auto-rotate']")) {
             actions.setComposerField({ autoRotate: target.checked });
+            return;
+        }
+
+        if (target.matches("[data-ref='ai-image-reshape']")) {
+            actions.setComposerField({ aiImageReshape: target.checked });
             return;
         }
 

@@ -31,7 +31,7 @@
 - Node 版本：`20.x`
 - 包管理：`npm ci`
 - 构建命令：`npm run build:web`
-- 输出目录：`apps/channel-web/dist`
+- 输出目录：`dist`
 - Vercel Framework Preset：`Vite`
 
 这些已经固定在仓库根目录：

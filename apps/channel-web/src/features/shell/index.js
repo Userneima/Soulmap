@@ -30,6 +30,17 @@ export const createShellActions = ({ store }) => ({
         this.setAccountMenuOpen(!current);
     },
     requestSearchFocus() {
+        const shouldOpenSidebar = typeof window !== "undefined"
+            && typeof window.matchMedia === "function"
+            && window.matchMedia("(max-width: 960px)").matches;
+
+        if (shouldOpenSidebar) {
+            store.dispatch({
+                type: "ui/set-sidebar",
+                payload: { open: true }
+            });
+        }
+
         store.dispatch({ type: "ui/request-search-focus" });
     },
     openChannelMenu(anchor = {}) {
@@ -41,6 +52,9 @@ export const createShellActions = ({ store }) => ({
     },
     closeChannelMenu() {
         store.dispatch({ type: "channel-menu/close" });
+    },
+    toggleAdminRevealAnonymous() {
+        store.dispatch({ type: "ui/toggle-admin-reveal-anonymous" });
     },
     openNotificationCenter(tab = "interaction", anchor = {}) {
         store.dispatch({ type: "channel-menu/close" });

@@ -14,9 +14,31 @@ const renderImages = (container, images) => {
     `).join("");
 };
 
+const syncDraftInputHeight = (input) => {
+    if (!input) {
+        return;
+    }
+
+    input.style.height = "0px";
+    const computedStyle = window.getComputedStyle(input);
+    const maxHeight = Number.parseFloat(computedStyle.maxHeight) || 0;
+    const nextHeight = input.scrollHeight;
+    if (maxHeight > 0 && nextHeight > maxHeight) {
+        input.style.height = `${maxHeight}px`;
+        input.style.overflowY = "auto";
+        return;
+    }
+
+    input.style.height = `${nextHeight}px`;
+    input.style.overflowY = "hidden";
+};
+
 export const mountComposerPanelBlock = ({ root, store, actions }) => {
     let refs = null;
     let previousCanCompose = null;
+    let previousExpanded = null;
+    let previousAnonymousMode = null;
+    let previousAliasSignature = "";
 
     const ensureRefs = () => {
         refs = {
@@ -29,6 +51,7 @@ export const mountComposerPanelBlock = ({ root, store, actions }) => {
             aiDisclosureSelect: root.querySelector("[data-ref='ai-disclosure-select']"),
             boardSelect: root.querySelector("[data-ref='board-select']"),
             autoRotate: root.querySelector("[data-ref='auto-rotate']"),
+            aiImageReshape: root.querySelector("[data-ref='ai-image-reshape']"),
             charCount: root.querySelector("[data-ref='char-count']"),
             submitButton: root.querySelector("[data-ref='submit-button']")
         };
@@ -58,12 +81,18 @@ export const mountComposerPanelBlock = ({ root, store, actions }) => {
             const vm = selectComposerPanelVM(store.getState());
             const shouldRerenderShell = !refs
                 || root.innerHTML === ""
-                || previousCanCompose !== vm.canCompose;
+                || previousCanCompose !== vm.canCompose
+                || previousExpanded !== vm.expanded
+                || previousAnonymousMode !== vm.anonymousMode
+                || previousAliasSignature !== `${vm.activeAlias?.key || ""}:${vm.activeAlias?.name || ""}:${vm.activeAlias?.avatar || ""}`;
 
             if (shouldRerenderShell) {
                 root.innerHTML = composerPanelTemplate(vm);
                 ensureRefs();
                 previousCanCompose = vm.canCompose;
+                previousExpanded = vm.expanded;
+                previousAnonymousMode = vm.anonymousMode;
+                previousAliasSignature = `${vm.activeAlias?.key || ""}:${vm.activeAlias?.name || ""}:${vm.activeAlias?.avatar || ""}`;
                 if (!vm.canCompose) {
                     return;
                 }
@@ -81,9 +110,16 @@ export const mountComposerPanelBlock = ({ root, store, actions }) => {
             }
             if (refs.draftInput) {
                 refs.draftInput.placeholder = vm.placeholder;
+                syncDraftInputHeight(refs.draftInput);
             }
             if (refs.boardSelect) {
                 refs.boardSelect.value = vm.selectedBoard;
+            }
+            if (refs.autoRotate) {
+                refs.autoRotate.checked = vm.autoRotate;
+            }
+            if (refs.aiImageReshape) {
+                refs.aiImageReshape.checked = vm.aiImageReshape;
             }
             if (refs.charCount) {
                 refs.charCount.textContent = `${vm.charCount}/1000`;
@@ -105,6 +141,9 @@ export const mountComposerPanelBlock = ({ root, store, actions }) => {
             }
 
             previousCanCompose = vm.canCompose;
+            previousExpanded = vm.expanded;
+            previousAnonymousMode = vm.anonymousMode;
+            previousAliasSignature = `${vm.activeAlias?.key || ""}:${vm.activeAlias?.name || ""}:${vm.activeAlias?.avatar || ""}`;
         }
     };
 };

@@ -1,10 +1,75 @@
 import { postCommentsSortChoices } from "../../entities/post/config.js";
 
-const getSortedComments = (comments, sort) => {
-    if (sort === "latest") {
-        return [...comments].reverse();
-    }
-    return [...comments];
+const buildThreadedComments = (comments, sort) => {
+    const enrichedComments = comments.map((comment, index) => ({
+        ...comment,
+        floorLabel: `${index + 1}L`,
+        originalIndex: index
+    }));
+
+    const byId = new Map(enrichedComments.map((comment) => [comment.id, comment]));
+    const childrenByParentId = new Map();
+
+    const rootComments = [];
+    enrichedComments.forEach((comment) => {
+        if (comment.parentCommentId && byId.has(comment.parentCommentId)) {
+            const siblings = childrenByParentId.get(comment.parentCommentId) || [];
+            siblings.push(comment);
+            childrenByParentId.set(comment.parentCommentId, siblings);
+            return;
+        }
+        rootComments.push(comment);
+    });
+
+    const sortByHot = (left, right) => {
+        const likesDiff = (right.likes || 0) - (left.likes || 0);
+        if (likesDiff !== 0) {
+            return likesDiff;
+        }
+        return left.originalIndex - right.originalIndex;
+    };
+
+    const sortByLatest = (left, right) => {
+        const rightTime = Date.parse(right.createdAt || "");
+        const leftTime = Date.parse(left.createdAt || "");
+        if (!Number.isNaN(rightTime) && !Number.isNaN(leftTime) && rightTime !== leftTime) {
+            return rightTime - leftTime;
+        }
+        return right.originalIndex - left.originalIndex;
+    };
+    const rootComparator = sort === "latest" ? sortByLatest : sortByHot;
+    rootComments.sort(rootComparator);
+
+    childrenByParentId.forEach((siblings, parentId) => {
+        const ordered = [...siblings].sort(sort === "latest" ? sortByLatest : (left, right) => (
+            Date.parse(left.createdAt || 0) - Date.parse(right.createdAt || 0)
+        ));
+        childrenByParentId.set(parentId, ordered);
+    });
+
+    const flattened = [];
+    rootComments.forEach((comment) => {
+        flattened.push({
+            ...comment,
+            replyDepth: 0,
+            replyTargetAuthorName: "",
+            replyTargetPreview: "",
+            displayText: comment.text
+        });
+
+        const children = childrenByParentId.get(comment.id) || [];
+        children.forEach((child) => {
+            flattened.push({
+                ...child,
+                replyDepth: 1,
+                replyTargetAuthorName: comment.authorName,
+                replyTargetPreview: comment.text,
+                displayText: child.text
+            });
+        });
+    });
+
+    return flattened;
 };
 
 export const selectCommentDrawerVM = (state) => {
@@ -13,6 +78,11 @@ export const selectCommentDrawerVM = (state) => {
     const authStatus = state.authState.status;
     const membershipStatus = state.membershipState.status;
     const canInteract = authStatus === "authenticated" && membershipStatus === "approved";
+    const canManageAnonymous = ["owner", "admin"].includes(state.runtimeState.realIdentity.role);
+    const showAdminReveal = canManageAnonymous && state.uiState.adminRevealAnonymous;
+    const activeAlias = state.runtimeState.anonymousProfiles.find((profile) => profile.key === state.runtimeState.activeAliasKey)
+        || state.runtimeState.anonymousProfiles[0]
+        || null;
 
     return {
         open: overlay.open,
@@ -25,8 +95,16 @@ export const selectCommentDrawerVM = (state) => {
         sort: overlay.sort,
         sortChoices: postCommentsSortChoices,
         post,
-        comments: getSortedComments(post?.comments || [], overlay.sort),
+        comments: buildThreadedComments(post?.comments || [], overlay.sort).map((comment) => ({
+            ...comment,
+            isLiked: overlay.likedCommentIds.includes(comment.id),
+            showAdminReveal: Boolean(showAdminReveal && comment.isAnonymous && comment.adminRevealIdentity)
+        })),
+        replyTarget: overlay.replyTarget,
         draftText: overlay.draftText,
+        anonymousMode: overlay.anonymousMode,
+        activeAlias,
+        adminRevealAnonymous: showAdminReveal,
         submitStatus: overlay.submitStatus,
         canSend: Boolean(overlay.draftText.trim()) && overlay.submitStatus !== "submitting" && overlay.status === "ready" && canInteract,
         copyEnabled: Boolean(post),
@@ -36,7 +114,9 @@ export const selectCommentDrawerVM = (state) => {
             : authStatus === "upgrading_legacy_anonymous"
                 ? "升级为正式账号后才能评论"
                 : membershipStatus === "approved"
-                    ? "发言要友善，畅聊不引战"
+                    ? overlay.anonymousMode
+                        ? "匿名回复会自动去除明显个人措辞"
+                        : "发言要友善，畅聊不引战"
                     : "申请加入频道后才能评论"
     };
 };

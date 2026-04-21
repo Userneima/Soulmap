@@ -12,6 +12,8 @@ export const selectFeedListVM = (state) => {
     const searchQuery = state.feedState.searchQuery || "";
     const normalizedSearchQuery = normalizeSearchValue(searchQuery);
     const likedPostIds = new Set(state.feedState.likedPostIds || []);
+    const canManageAnonymous = ["owner", "admin"].includes(state.runtimeState.realIdentity.role);
+    const showAdminReveal = canManageAnonymous && state.uiState.adminRevealAnonymous;
     const items = normalizedSearchQuery
         ? state.feedState.items.filter((post) => buildSearchCorpus(post).includes(normalizedSearchQuery))
         : state.feedState.items;
@@ -29,7 +31,8 @@ export const selectFeedListVM = (state) => {
                 previewText: preview.text,
                 isTruncated: preview.isTruncated,
                 showFullEntry: preview.isTruncated,
-                isLiked: likedPostIds.has(post.id)
+                isLiked: likedPostIds.has(post.id),
+                showAdminReveal: Boolean(showAdminReveal && post.isAnonymous && post.adminRevealIdentity)
             };
         }),
         searchQuery,

@@ -13,15 +13,22 @@ const buildPostCard = (post) => `
     <article class="feed-card" data-post-id="${post.id}">
         <div class="feed-card__header">
             <img alt="${escapeHtml(post.authorName)}" class="feed-card__avatar" src="${post.authorAvatar}" />
-            <div class="feed-card__meta">
-                <div class="feed-card__author-row">
-                    <span class="feed-card__author">${escapeHtml(post.authorName)}</span>
-                    ${!post.isAnonymous ? '<span class="feed-card__admin-tag">管理员</span>' : ""}
+                <div class="feed-card__meta">
+                    <div class="feed-card__author-row">
+                        <span class="feed-card__author">${escapeHtml(post.authorName)}</span>
+                    ${post.role === "admin" && !post.isAnonymous ? '<span class="feed-card__admin-tag">管理员</span>' : ""}
                     ${post.role === "owner" && !post.isAnonymous ? '<span class="feed-card__badge">频道主</span>' : ""}
+                    </div>
+                    <div class="feed-card__time">${escapeHtml(post.timeLabel)}</div>
+                    ${post.showAdminReveal ? `
+                        <div class="feed-card__admin-reveal">
+                            <span class="feed-card__admin-reveal-label">真实身份</span>
+                            <img alt="${escapeHtml(post.adminRevealIdentity.name)}" class="feed-card__admin-reveal-avatar" src="${post.adminRevealIdentity.avatar}" />
+                            <span class="feed-card__admin-reveal-name">${escapeHtml(post.adminRevealIdentity.name)}</span>
+                        </div>
+                    ` : ""}
                 </div>
-                <div class="feed-card__time">${escapeHtml(post.timeLabel)}</div>
             </div>
-        </div>
         <div class="feed-card__body">
             <div class="feed-card__body-text">${formatComposerTextForPost(post.previewText || "")}</div>
             ${post.showFullEntry ? '<button class="feed-card__full-entry" data-feed-action="open-post-body" type="button">全文</button>' : ""}

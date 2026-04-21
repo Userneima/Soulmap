@@ -5,4 +5,5 @@ dist/
 supabase/.temp/
 .env.local
 .env.*.local
+supabase/functions/.env
 .vercel/

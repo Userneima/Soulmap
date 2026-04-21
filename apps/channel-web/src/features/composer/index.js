@@ -2,6 +2,7 @@ import {
     anonymizeComposerText,
     cloneComposerImageForPost,
     createImageDraftFromFile,
+    generateAnonymousPersona,
     getChannelActionErrorMessage,
     processAnonymousImageForPost,
     readBlobAsDataUrl,
@@ -32,6 +33,12 @@ const ensureApprovedMember = (store, onGuest, onUnapproved) => {
 };
 
 export const createComposerActions = ({ store, dataService, showToast, feedActions }) => ({
+    expandComposer() {
+        store.dispatch({ type: "composer/expand" });
+    },
+    collapseComposer() {
+        store.dispatch({ type: "composer/collapse" });
+    },
     setComposerField(partial) {
         store.dispatch({
             type: "composer/set-field",
@@ -88,6 +95,7 @@ export const createComposerActions = ({ store, dataService, showToast, feedActio
         )) {
             return;
         }
+        store.dispatch({ type: "composer/expand" });
         store.dispatch({ type: "composer/toggle-anonymous" });
     },
     rotateAliasProfile() {
@@ -118,6 +126,48 @@ export const createComposerActions = ({ store, dataService, showToast, feedActio
             type: "runtime/set-alias-key",
             payload: { key: nextProfile.key }
         });
+    },
+    async regenerateAliasProfile() {
+        if (!ensureApprovedMember(
+            store,
+            (mode) => {
+                store.dispatch({
+                    type: "auth-gate/open",
+                    payload: { mode: mode === "upgrade" ? "upgrade" : "login" }
+                });
+            },
+            () => {
+                showToast({
+                    tone: "info",
+                    message: "先通过频道审核，才能生成匿名马甲。"
+                });
+            }
+        )) {
+            return;
+        }
+
+        const { activeAliasKey } = store.getState().runtimeState;
+        if (!activeAliasKey) {
+            return;
+        }
+
+        try {
+            const nextProfile = generateAnonymousPersona(`${activeAliasKey}-${Date.now()}`);
+            const profiles = await dataService.updateAliasProfile(activeAliasKey, nextProfile);
+            store.dispatch({
+                type: "runtime/set-alias-profiles",
+                payload: { profiles }
+            });
+            showToast({
+                tone: "success",
+                message: "新马甲已生成。"
+            });
+        } catch (error) {
+            showToast({
+                tone: "error",
+                message: getChannelActionErrorMessage("update_identity", error)
+            });
+        }
     },
     async addComposerImages(fileList) {
         const files = Array.from(fileList || []).filter((file) => file.type.startsWith("image/"));
@@ -181,11 +231,30 @@ export const createComposerActions = ({ store, dataService, showToast, feedActio
 
         try {
             const anonymousMode = state.composerState.anonymousMode;
-            const publishedImages = await Promise.all(images.map((image) => (
-                anonymousMode ? processAnonymousImageForPost(image) : cloneComposerImageForPost(image)
-            )));
+            const shouldAiReshapeImages = anonymousMode && state.composerState.aiImageReshape && images.length > 0;
+            const sourceImages = shouldAiReshapeImages
+                ? await Promise.all(images.map((image) => cloneComposerImageForPost(image)))
+                : null;
 
-            const publishedText = anonymousMode ? anonymizeComposerText(rawText) : rawText;
+            const anonymizedDraft = anonymousMode && (rawText || shouldAiReshapeImages)
+                ? await dataService.anonymizeAnonymousDraft?.({
+                    text: rawText,
+                    purpose: "post",
+                    channelId: state.runtimeState.channel?.id || null,
+                    images: shouldAiReshapeImages ? sourceImages : [],
+                    reshapeImages: shouldAiReshapeImages
+                })
+                : null;
+            const publishedText = anonymousMode
+                ? (anonymizedDraft?.text || anonymizeComposerText(rawText))
+                : rawText;
+            const publishedImages = anonymousMode
+                ? (
+                    shouldAiReshapeImages && anonymizedDraft?.images?.length === images.length
+                        ? anonymizedDraft.images
+                        : await Promise.all(images.map((image) => processAnonymousImageForPost(image)))
+                )
+                : await Promise.all(images.map((image) => cloneComposerImageForPost(image)));
             const activeAliasKey = state.runtimeState.activeAliasKey;
             const post = await dataService.publishPost({
                 body: publishedText || "分享一张图片",
@@ -200,7 +269,7 @@ export const createComposerActions = ({ store, dataService, showToast, feedActio
             revokeImageDrafts(images);
             store.dispatch({ type: "composer/reset" });
             if (anonymousMode && state.composerState.autoRotate) {
-                this.rotateAliasProfile();
+                await this.regenerateAliasProfile();
             }
 
             const targetBoard = post.board === "none" ? "all" : post.board;

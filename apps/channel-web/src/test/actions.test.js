@@ -20,6 +20,7 @@ const createMockDataService = () => ({
     listPosts: vi.fn(),
     getPost: vi.fn(),
     likePost: vi.fn(),
+    likeComment: vi.fn(),
     publishPost: vi.fn(),
     publishComment: vi.fn(),
     updateIdentity: vi.fn()
@@ -181,6 +182,38 @@ describe("channel feature actions", () => {
         expect(store.getState().overlayState.comments.submitStatus).toBe("idle");
     });
 
+    it("submits reply comments with parent comment id", async () => {
+        seedApprovedViewer(store);
+        store.dispatch({
+            type: "comments/open",
+            payload: { postId: "post-1", source: "comments" }
+        });
+        store.dispatch({
+            type: "comments/set-field",
+            payload: {
+                status: "ready",
+                draftText: "接着这条说",
+                replyTarget: {
+                    id: "comment-1",
+                    authorName: "海屿",
+                    text: "原评论"
+                }
+            }
+        });
+        dataService.publishComment.mockResolvedValue({ id: "comment-2" });
+        dataService.listPosts.mockResolvedValue([{ id: "post-1", comments: [] }]);
+        dataService.getPost.mockResolvedValue({ id: "post-1", comments: [] });
+
+        await actions.submitComment();
+
+        expect(dataService.publishComment).toHaveBeenCalledWith(expect.objectContaining({
+            postId: "post-1",
+            parentCommentId: "comment-1",
+            body: "接着这条说"
+        }));
+        expect(store.getState().overlayState.comments.replyTarget).toBe(null);
+    });
+
     it("opens post detail drawer with source metadata", () => {
         actions.openOverlay("comments", {
             postId: "post-1",
@@ -210,6 +243,32 @@ describe("channel feature actions", () => {
         expect(dataService.likePost).toHaveBeenCalledTimes(1);
         expect(store.getState().feedState.items[0].likes).toBe(4);
         expect(store.getState().feedState.likedPostIds).toContain("post-1");
+    });
+
+    it("likes a comment once for the current session and updates the count", async () => {
+        seedApprovedViewer(store);
+        store.dispatch({
+            type: "comments/open",
+            payload: { postId: "post-1", source: "comments" }
+        });
+        store.dispatch({
+            type: "comments/load-success",
+            payload: {
+                post: {
+                    id: "post-1",
+                    comments: [{ id: "comment-1", likes: 2 }]
+                }
+            }
+        });
+        dataService.likeComment.mockResolvedValue(3);
+
+        await actions.likeComment("comment-1");
+        await actions.likeComment("comment-1");
+
+        expect(dataService.likeComment).toHaveBeenCalledTimes(1);
+        expect(dataService.likeComment).toHaveBeenCalledWith("comment-1", "post-1");
+        expect(store.getState().overlayState.comments.post.comments[0].likes).toBe(3);
+        expect(store.getState().overlayState.comments.likedCommentIds).toContain("comment-1");
     });
 
     it("updates real identity after saving identity dialog", async () => {
@@ -321,7 +380,37 @@ describe("channel feature actions", () => {
         expect(store.getState().uiState.searchFocusNonce).toBe(0);
         actions.requestSearchFocus();
         expect(store.getState().uiState.searchFocusNonce).toBe(1);
-        expect(store.getState().uiState.sidebarOpen).toBe(true);
+        expect(store.getState().uiState.sidebarOpen).toBe(false);
+    });
+
+    it("keeps composer collapsed by default and expands when anonymous mode is enabled", () => {
+        seedApprovedViewer(store);
+
+        expect(store.getState().composerState.expanded).toBe(false);
+        expect(store.getState().composerState.anonymousMode).toBe(false);
+
+        actions.toggleAnonymousMode();
+
+        expect(store.getState().composerState.expanded).toBe(true);
+        expect(store.getState().composerState.anonymousMode).toBe(true);
+    });
+
+    it("submits anonymous posts with alias author payload", async () => {
+        seedApprovedViewer(store);
+        store.dispatch({ type: "composer/toggle-anonymous" });
+        store.dispatch({
+            type: "composer/set-field",
+            payload: { draftText: "匿名内容" }
+        });
+        dataService.publishPost.mockResolvedValue({ id: "post-1", board: "none" });
+        dataService.listPosts.mockResolvedValue([{ id: "post-1", comments: [] }]);
+
+        await actions.submitPost();
+
+        expect(dataService.publishPost).toHaveBeenCalledWith(expect.objectContaining({
+            author: { type: "alias_session", key: "slot-baiyu" }
+        }));
+        expect(store.getState().composerState.expanded).toBe(false);
     });
 
     it("opens and closes the channel menu overlay", () => {

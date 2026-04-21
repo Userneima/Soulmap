@@ -17,6 +17,11 @@ export const attachChannelMenuDialogEvents = ({ root, actions }) => {
             return;
         }
 
+        if (action === "toggle-anonymous-reveal") {
+            actions.toggleAdminRevealAnonymous();
+            return;
+        }
+
         if (action === "channel-management") {
             actions.showToast({
                 tone: "info",
