@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createStore } from "../shared/state/store.js";
 import { mountSidebarNavBlock } from "../blocks/sidebar-nav/index.js";
 import { createAppActions } from "../features/app-actions.js";
@@ -29,15 +29,18 @@ const createMockDataService = () => ({
 
 describe("sidebar nav account menu", () => {
     let store;
+    let dataService;
     let actions;
     let root;
     let block;
 
     beforeEach(() => {
+        document.body.innerHTML = "";
         store = createStore();
+        dataService = createMockDataService();
         actions = createAppActions({
             store,
-            dataService: createMockDataService()
+            dataService
         });
 
         store.dispatch({
@@ -55,6 +58,10 @@ describe("sidebar nav account menu", () => {
         block.render();
     });
 
+    afterEach(() => {
+        document.body.innerHTML = "";
+    });
+
     it("opens the account menu when clicking the identity footer", () => {
         const trigger = root.querySelector("[data-sidebar-action='toggle-account-menu']");
         expect(trigger).toBeTruthy();
@@ -64,15 +71,6 @@ describe("sidebar nav account menu", () => {
         expect(store.getState().uiState.accountMenuOpen).toBe(true);
         block.render();
         expect(root.querySelector(".sidebar-nav__account-menu")).toBeTruthy();
-    });
-
-    it("focuses the in-channel search input when search focus is requested", () => {
-        actions.requestSearchFocus();
-        block.render();
-
-        const searchInput = root.querySelector("[data-sidebar-ref='search-input']");
-        expect(searchInput).toBeTruthy();
-        expect(document.activeElement).toBe(searchInput);
     });
 
     it("shows a guest login trigger instead of a fake member identity", () => {
@@ -95,5 +93,47 @@ describe("sidebar nav account menu", () => {
 
         expect(store.getState().overlayState.authGate.open).toBe(true);
         expect(store.getState().overlayState.authGate.mode).toBe("login");
+    });
+
+    it("renders homepage links in the brand and primary navigation", () => {
+        const brandLink = root.querySelector(".sidebar-nav__brand-mark");
+        const homeNavLink = root.querySelector(".sidebar-nav__link");
+        const navLinks = root.querySelectorAll(".sidebar-nav__link");
+
+        expect(brandLink?.getAttribute("href")).toBe("?");
+        expect(homeNavLink?.getAttribute("href")).toBe("?");
+        expect(homeNavLink?.textContent).toContain("返回主页");
+        expect(navLinks).toHaveLength(1);
+    });
+
+    it("opens the search dialog from the sidebar search entry", async () => {
+        dataService.listPosts.mockResolvedValue([{ id: "post-1", authorName: "云栖", text: "搜索结果", comments: [] }]);
+
+        root.querySelector("[data-sidebar-action='search']")?.click();
+        await Promise.resolve();
+
+        expect(store.getState().overlayState.searchDialog.open).toBe(true);
+        expect(dataService.listPosts).toHaveBeenCalledWith(null);
+    });
+
+    it("replaces the idle nav section with a real-channel CTA in demo mode", () => {
+        store.dispatch({
+            type: "runtime/preview-ready",
+            payload: {
+                channel: {
+                    id: "demo-channel",
+                    slug: "demo",
+                    name: "品运一家人",
+                    logoUrl: "demo-logo"
+                }
+            }
+        });
+        block.render();
+
+        expect(root.textContent).toContain("准备正式参与？");
+        expect(root.textContent).toContain("进入真实频道");
+        expect(root.textContent).toContain("真实频道会进入正式登录和加入流程。");
+        expect(root.textContent).not.toContain("试玩只是为了让你快速理解机制");
+        expect(root.querySelector(".sidebar-nav__promo")).toBeTruthy();
     });
 });

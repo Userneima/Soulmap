@@ -34,39 +34,65 @@ const buildChannelCard = (channel) => `
     </a>
 `;
 
-const renderState = (root, title, description) => {
+const buildDirectoryHero = ({ realChannelHref = "", realChannelLabel = "进入真实频道" }) => `
+    <header class="channel-directory__hero">
+        <div>
+            <div class="channel-directory__brand">Soulmap</div>
+            <h1>先试玩，再进入真实频道</h1>
+            <p>第一次打开链接，先完整体验一轮许愿、选愿望、交付、猜测和揭晓。真正参与本周回合，再进入真实频道登录和加入。</p>
+            <div class="channel-directory__hero-actions">
+                <a class="channel-directory__hero-action channel-directory__hero-action--primary" href="?view=demo">先试玩完整流程</a>
+                <a class="channel-directory__hero-action" href="${escapeHtml(realChannelHref || "#real-channels")}">${escapeHtml(realChannelLabel)}</a>
+            </div>
+            <div class="channel-directory__hero-note">试玩不会写入真实频道，也不要求先登录。</div>
+        </div>
+    </header>
+`;
+
+const renderState = (root, title, description, realChannelHref = "") => {
     root.innerHTML = `
         <div class="channel-directory">
-            <header class="channel-directory__hero">
-                    <div>
-                        <div class="channel-directory__brand">Soulmap</div>
-                        <h1>${escapeHtml(title)}</h1>
-                        <p>${escapeHtml(description)}</p>
-                    </div>
-                </header>
+            ${buildDirectoryHero({
+        realChannelHref,
+        realChannelLabel: realChannelHref ? "进入真实频道" : "查看公开频道"
+    })}
+            <section class="channel-directory__section">
+                <div class="channel-directory__section-head">
+                    <h2>${escapeHtml(title)}</h2>
+                    <p>${escapeHtml(description)}</p>
+                </div>
+            </section>
         </div>
     `;
 };
 
 const renderDirectory = (root, channels) => {
+    const realChannelHref = channels[0]?.slug
+        ? `?channel=${encodeURIComponent(channels[0].slug)}`
+        : runtimeConfig.channelSlug
+            ? `?channel=${encodeURIComponent(runtimeConfig.channelSlug)}`
+            : "";
     root.innerHTML = `
         <div class="channel-directory">
-            <header class="channel-directory__hero">
-                <div>
-                    <div class="channel-directory__brand">Soulmap</div>
-                    <h1>选择一个频道</h1>
-                    <p>当前先保留最小频道能力：进入频道、查看讨论、发内容、做基础互动。</p>
+            ${buildDirectoryHero({
+        realChannelHref,
+        realChannelLabel: realChannelHref ? "进入真实频道" : "查看公开频道"
+    })}
+            <section class="channel-directory__section">
+                <div class="channel-directory__section-head" id="real-channels">
+                    <h2>真实频道</h2>
+                    <p>这里连接真实数据和真实加入流程。先试玩，再决定是否进入正式回合。</p>
                 </div>
-            </header>
-            <section class="channel-directory__grid">
+                <div class="channel-directory__grid">
                 ${channels.length
         ? channels.map((channel) => buildChannelCard(channel)).join("")
         : `
-                        <div class="channel-directory__empty">
-                            <h2>还没有可浏览的频道</h2>
-                            <p>先创建一个公开频道，再回来演示完整流程。</p>
-                        </div>
-                    `}
+                    <div class="channel-directory__empty">
+                        <h2>还没有可浏览的频道</h2>
+                        <p>试玩模式已经可以完整体验流程；真实频道准备好后，会在这里出现。</p>
+                    </div>
+                `}
+                </div>
             </section>
         </div>
     `;
@@ -77,7 +103,12 @@ export const mountChannelListPage = async ({ root, dataService }) => {
     if (fallbackChannels.length) {
         renderDirectory(root, fallbackChannels);
     } else {
-        renderState(root, "选择一个频道", "先进入频道，再演示发帖、评论、身份切换和最小互动。");
+        renderState(
+            root,
+            "真实频道暂未就绪",
+            "你仍然可以先通过试玩模式完整走一轮 Soulmap 的五阶段流程。",
+            runtimeConfig.channelSlug ? `?channel=${encodeURIComponent(runtimeConfig.channelSlug)}` : ""
+        );
     }
 
     try {
@@ -85,7 +116,12 @@ export const mountChannelListPage = async ({ root, dataService }) => {
         renderDirectory(root, channels);
     } catch (error) {
         if (!fallbackChannels.length) {
-            renderState(root, "频道列表暂时不可用", error?.message || "公开频道读取失败，请稍后刷新。");
+            renderState(
+                root,
+                "频道列表暂时不可用",
+                error?.message || "公开频道读取失败，请稍后刷新。",
+                runtimeConfig.channelSlug ? `?channel=${encodeURIComponent(runtimeConfig.channelSlug)}` : ""
+            );
         }
     }
 };

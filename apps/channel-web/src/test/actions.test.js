@@ -12,6 +12,7 @@ const createMockDataService = () => ({
     loadApprovedMemberRuntime: vi.fn(),
     listPendingJoinRequests: vi.fn(),
     loginWithPassword: vi.fn(),
+    registerWithPassword: vi.fn(),
     upgradeLegacyAnonymousUser: vi.fn(),
     submitJoinRequest: vi.fn(),
     approveJoinRequest: vi.fn(),
@@ -80,6 +81,7 @@ describe("channel feature actions", () => {
     let actions;
 
     beforeEach(() => {
+        window.history.replaceState({}, "", "/");
         store = createStore();
         dataService = createMockDataService();
         dataService.getChannelShell.mockReturnValue(approvedRuntime.channel);
@@ -774,6 +776,110 @@ describe("channel feature actions", () => {
         expect(store.getState().authState.status).toBe("authenticated");
     });
 
+    it("registers with password and refreshes approved runtime", async () => {
+        store.dispatch({
+            type: "auth-gate/open",
+            payload: { mode: "register" }
+        });
+        store.dispatch({
+            type: "auth/set-field",
+            payload: {
+                displayName: "海屿",
+                email: "member@example.com",
+                password: "secret123"
+            }
+        });
+        dataService.registerWithPassword.mockResolvedValue({
+            user: { id: "user-1", email: "member@example.com" },
+            isAnonymous: false
+        });
+        dataService.loadChannelBootstrap.mockResolvedValue({
+            channel: approvedRuntime.channel,
+            auth: {
+                user: { id: "user-1", email: "member@example.com" },
+                isAnonymous: false
+            },
+            membership: {
+                status: "approved",
+                joinRequest: null,
+                reviewItems: [],
+                role: "owner"
+            },
+            memberRuntime: approvedRuntime
+        });
+
+        await actions.submitAuthFlow();
+
+        expect(dataService.registerWithPassword).toHaveBeenCalledWith("member@example.com", "secret123", "海屿");
+        expect(store.getState().authState.status).toBe("authenticated");
+        expect(store.getState().overlayState.authGate.open).toBe(false);
+    });
+
+    it("keeps create-channel draft after successful registration", async () => {
+        window.history.replaceState({}, "", "/?view=create-channel");
+        store.dispatch({
+            type: "auth-gate/open",
+            payload: { mode: "register" }
+        });
+        store.dispatch({
+            type: "auth/set-field",
+            payload: {
+                displayName: "海屿",
+                email: "member@example.com",
+                password: "secret123"
+            }
+        });
+        store.dispatch({
+            type: "channel-create/set-field",
+            payload: {
+                name: "新频道",
+                description: "保留中的草稿"
+            }
+        });
+        dataService.registerWithPassword.mockResolvedValue({
+            user: { id: "user-1", email: "member@example.com" },
+            isAnonymous: false
+        });
+        dataService.getAuthState.mockResolvedValue({
+            user: { id: "user-1", email: "member@example.com" },
+            isAnonymous: false
+        });
+
+        await actions.submitAuthFlow();
+
+        const state = store.getState();
+        expect(state.authState.status).toBe("authenticated");
+        expect(state.overlayState.authGate.open).toBe(false);
+        expect(state.channelCreateState.name).toBe("新频道");
+        expect(state.channelCreateState.description).toBe("保留中的草稿");
+        expect(dataService.loadChannelBootstrap).not.toHaveBeenCalled();
+    });
+
+    it("shows an explicit error when registration returns no session", async () => {
+        store.dispatch({
+            type: "auth-gate/open",
+            payload: { mode: "register" }
+        });
+        store.dispatch({
+            type: "auth/set-field",
+            payload: {
+                displayName: "海屿",
+                email: "member@example.com",
+                password: "secret123"
+            }
+        });
+        const error = new Error("Supabase email confirmation is still enabled.");
+        error.code = "auth_email_confirmation_required";
+        dataService.registerWithPassword.mockRejectedValue(error);
+
+        await actions.submitAuthFlow();
+
+        const state = store.getState();
+        expect(state.authState.status).toBe("guest");
+        expect(state.authState.displayName).toBe("海屿");
+        expect(state.authState.error).toContain("还没有关闭邮箱确认");
+    });
+
     it("resets membership to guest when password login fails", async () => {
         store.dispatch({
             type: "auth/set-field",
@@ -846,10 +952,13 @@ describe("channel feature actions", () => {
         expect(store.getState().uiState.accountMenuOpen).toBe(false);
     });
 
-    it("requests channel search focus from the hero search entry", () => {
-        expect(store.getState().uiState.searchFocusNonce).toBe(0);
-        actions.requestSearchFocus();
-        expect(store.getState().uiState.searchFocusNonce).toBe(1);
+    it("opens the channel search dialog from the hero search entry", async () => {
+        dataService.listPosts.mockResolvedValue([{ id: "post-1", authorName: "云栖", text: "test", comments: [] }]);
+
+        await actions.requestSearchFocus();
+
+        expect(store.getState().overlayState.searchDialog.open).toBe(true);
+        expect(store.getState().overlayState.searchDialog.items).toHaveLength(1);
         expect(store.getState().uiState.sidebarOpen).toBe(false);
     });
 

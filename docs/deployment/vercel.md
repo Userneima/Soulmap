@@ -31,14 +31,14 @@
 - Node 版本：`20.x`
 - 包管理：`npm ci`
 - 构建命令：`npm run build:web`
-- 输出目录：`dist`
+- 输出目录：`apps/channel-web/dist`
 - Vercel Framework Preset：`Vite`
 
 这些已经固定在仓库根目录：
 
-- [vercel.json](/Users/yuchao/Documents/GitHub/Channel/vercel.json)
-- [package.json](/Users/yuchao/Documents/GitHub/Channel/package.json)
-- [.nvmrc](/Users/yuchao/Documents/GitHub/Channel/.nvmrc)
+- `vercel.json`
+- `package.json`
+- `.nvmrc`
 
 ## 环境变量约定
 
@@ -51,7 +51,7 @@
 
 模板文件：
 
-- [.env.example](/Users/yuchao/Documents/GitHub/Channel/.env.example)
+- `.env.example`
 
 注意：
 
@@ -68,7 +68,7 @@
 
 对应实现：
 
-- [runtime-config.js](/Users/yuchao/Documents/GitHub/Channel/apps/channel-web/src/shared/config/runtime-config.js)
+- `apps/channel-web/src/shared/config/runtime-config.js`
 
 这意味着：
 

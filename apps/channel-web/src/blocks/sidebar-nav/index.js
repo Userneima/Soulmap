@@ -11,7 +11,6 @@ export const mountSidebarNavBlock = ({ root, store, actions }) => {
 
     const ensureRefs = () => {
         refs = {
-            searchInput: root.querySelector("[data-sidebar-ref='search-input']"),
             accountShell: root.querySelector("[data-sidebar-ref='account-shell']")
         };
     };
@@ -26,7 +25,6 @@ export const mountSidebarNavBlock = ({ root, store, actions }) => {
             || previousVM.brandName !== vm.brandName
             || previousVM.searchChannelName !== vm.searchChannelName
             || previousVM.searchChannelBadge !== vm.searchChannelBadge
-            || previousVM.searchFocusNonce !== vm.searchFocusNonce
             || previousVM.isAuthenticated !== vm.isAuthenticated
             || previousVM.currentIdentity.name !== vm.currentIdentity.name
             || previousVM.currentIdentity.avatar !== vm.currentIdentity.avatar
@@ -67,21 +65,8 @@ export const mountSidebarNavBlock = ({ root, store, actions }) => {
                     });
                     hasBoundDocumentEvents = true;
                 }
-                if (refs?.searchInput && vm.searchFocusNonce) {
-                    refs.searchInput.focus();
-                    refs.searchInput.select();
-                }
                 previousVM = vm;
                 return;
-            }
-
-            if (refs?.searchInput && document.activeElement !== refs.searchInput) {
-                refs.searchInput.value = vm.searchQuery;
-            }
-
-            if (refs?.searchInput && previousVM?.searchFocusNonce !== vm.searchFocusNonce) {
-                refs.searchInput.focus();
-                refs.searchInput.select();
             }
 
             previousVM = vm;

@@ -1,4 +1,4 @@
-export const createShellActions = ({ store }) => ({
+export const createShellActions = ({ store, dataService, showToast }) => ({
     setSidebarOpen(open) {
         store.dispatch({
             type: "ui/set-sidebar",
@@ -29,19 +29,38 @@ export const createShellActions = ({ store }) => ({
         const current = store.getState().uiState.accountMenuOpen;
         this.setAccountMenuOpen(!current);
     },
-    requestSearchFocus() {
-        const shouldOpenSidebar = typeof window !== "undefined"
-            && typeof window.matchMedia === "function"
-            && window.matchMedia("(max-width: 960px)").matches;
+    async openSearchDialog() {
+        store.dispatch({ type: "search-dialog/open" });
+        store.dispatch({ type: "search-dialog/load-start" });
 
-        if (shouldOpenSidebar) {
+        try {
+            const items = await dataService.listPosts(null);
             store.dispatch({
-                type: "ui/set-sidebar",
-                payload: { open: true }
+                type: "search-dialog/load-success",
+                payload: { items }
+            });
+        } catch (error) {
+            store.dispatch({
+                type: "search-dialog/load-error",
+                payload: { error }
+            });
+            showToast?.({
+                tone: "error",
+                message: "频道搜索暂时不可用，请稍后再试。"
             });
         }
-
-        store.dispatch({ type: "ui/request-search-focus" });
+    },
+    closeSearchDialog() {
+        store.dispatch({ type: "search-dialog/close" });
+    },
+    setSearchDialogField(partial) {
+        store.dispatch({
+            type: "search-dialog/set-field",
+            payload: partial
+        });
+    },
+    requestSearchFocus() {
+        void this.openSearchDialog();
     },
     openChannelMenu(anchor = {}) {
         store.dispatch({ type: "notification-center/close" });

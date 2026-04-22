@@ -4,6 +4,7 @@
 
 文件职责：
 - `index.html`：只保留根挂载点和运行时脚本入口
+- `public/`：只保留实际会被应用消费的静态资源和运行时兜底配置
 - `src/main.js`：应用入口
 - `src/screens/channel-page/`：页面装配层
 - `src/blocks/`：稳定 UI block
@@ -24,3 +25,5 @@
 - 如果只改某个界面区域，优先只动对应 `src/blocks/<block>/`
 - 如果改的是行为或数据流，优先动 `src/features/` 和 `src/shared/state/`
 - 如果只改视觉规则，优先同步 `docs/design/quiet-curator.md`
+- 不要把截图、对照稿、临时素材堆到 `public/`，这些应留在 `prototypes/` 或文档目录
+- 产品背景和作业说明放 `docs/product/`，不要回填进 app 目录

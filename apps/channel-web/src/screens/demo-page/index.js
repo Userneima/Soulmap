@@ -1,11 +1,10 @@
-import { channelPageTemplate } from "./template.js";
+import "./styles.css";
+import { demoPageTemplate } from "./template.js";
 import { mountSidebarNavBlock } from "../../blocks/sidebar-nav/index.js";
 import { mountChannelHeroBlock } from "../../blocks/channel-hero/index.js";
 import { mountBoardTabsBlock } from "../../blocks/board-tabs/index.js";
 import { mountComposerPanelBlock } from "../../blocks/composer-panel/index.js";
 import { mountFeedListBlock } from "../../blocks/feed-list/index.js";
-import { mountJoinRequestPanelBlock } from "../../blocks/join-request-panel/index.js";
-import { mountMembershipReviewPanelBlock } from "../../blocks/membership-review-panel/index.js";
 import { mountCommentDrawerBlock } from "../../blocks/comment-drawer/index.js";
 import { mountImageLightboxBlock } from "../../blocks/image-lightbox/index.js";
 import { mountChannelIntelligenceBlock } from "../../blocks/channel-intelligence/index.js";
@@ -18,15 +17,13 @@ import { mountAuthGateBlock } from "../../blocks/auth-gate/index.js";
 import { mountSearchDialogBlock } from "../../blocks/search-dialog/index.js";
 import { mountSystemFeedbackBlock } from "../../blocks/system-feedback/index.js";
 
-export const mountChannelPage = ({ root, store, actions }) => {
-    root.innerHTML = channelPageTemplate();
+export const mountDemoPage = ({ root, store, actions }) => {
+    root.innerHTML = demoPageTemplate();
 
     const blockSlots = {
         sidebarNav: root.querySelector('[data-screen-slot="sidebar-nav"]'),
         channelHero: root.querySelector('[data-screen-slot="channel-hero"]'),
         boardTabs: root.querySelector('[data-screen-slot="board-tabs"]'),
-        joinRequestPanel: root.querySelector('[data-screen-slot="join-request-panel"]'),
-        membershipReviewPanel: root.querySelector('[data-screen-slot="membership-review-panel"]'),
         channelIntelligence: root.querySelector('[data-screen-slot="channel-intelligence"]'),
         composerPanel: root.querySelector('[data-screen-slot="composer-panel"]'),
         feedList: root.querySelector('[data-screen-slot="feed-list"]'),
@@ -48,8 +45,6 @@ export const mountChannelPage = ({ root, store, actions }) => {
         mountSidebarNavBlock({ root: blockSlots.sidebarNav, store, actions }),
         mountChannelHeroBlock({ root: blockSlots.channelHero, store, actions }),
         mountBoardTabsBlock({ root: blockSlots.boardTabs, store, actions }),
-        mountJoinRequestPanelBlock({ root: blockSlots.joinRequestPanel, store, actions }),
-        mountMembershipReviewPanelBlock({ root: blockSlots.membershipReviewPanel, store, actions }),
         mountChannelIntelligenceBlock({ root: blockSlots.channelIntelligence, store, actions }),
         mountComposerPanelBlock({ root: blockSlots.composerPanel, store, actions }),
         mountFeedListBlock({ root: blockSlots.feedList, store, actions }),
@@ -65,6 +60,8 @@ export const mountChannelPage = ({ root, store, actions }) => {
         mountSystemFeedbackBlock({ root: blockSlots.systemFeedback, store, actions })
     ];
 
+    let resizeTimeout = null;
+
     const renderAll = () => {
         const state = store.getState();
         screenRoot?.classList.toggle("channel-page--condensed", state.uiState.topRegion === "condensed");
@@ -73,7 +70,6 @@ export const mountChannelPage = ({ root, store, actions }) => {
         });
     };
 
-    let resizeTimeout = null;
     const syncViewportState = () => {
         actions.syncTopRegion(window.scrollY);
         if (window.innerWidth > 1080) {

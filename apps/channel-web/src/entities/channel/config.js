@@ -97,9 +97,7 @@ export const channelShellConfig = {
     channelBadge: "品",
     memberCountLabel: "16 成员",
     primaryNavItems: [
-        { icon: "home", label: "频道动态" },
-        { icon: "explore", label: "探索发现" },
-        { icon: "grid_view", label: "管理中心" }
+        { icon: "home", label: "返回主页" }
     ],
     channelItems: []
 };

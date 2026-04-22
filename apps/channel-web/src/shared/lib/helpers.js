@@ -297,6 +297,26 @@ export const getChannelActionErrorMessage = (action, error) => {
             : "验证码无效或已过期，请重新获取。";
     }
 
+    if (lowerMessage.includes("user already registered")) {
+        return "这个邮箱已经注册过了，请直接登录。";
+    }
+
+    if (lowerMessage.includes("password should be at least")
+        || lowerMessage.includes("weak password")
+        || lowerMessage.includes("password is too weak")) {
+        return "密码强度不够，请至少使用 6 位字符。";
+    }
+
+    if (lowerMessage.includes("invalid email")
+        || lowerMessage.includes("unable to validate email address")
+        || lowerMessage.includes("email address is invalid")) {
+        return "邮箱格式不正确，请检查后重试。";
+    }
+
+    if (code === "auth_email_confirmation_required") {
+        return "当前环境还没有关闭邮箱确认，注册后无法直接登录，请先调整 Supabase Auth 设置。";
+    }
+
     if (lowerMessage.includes("token has expired")) {
         return "验证码无效或已过期，请重新获取。";
     }
@@ -317,6 +337,7 @@ export const getChannelActionErrorMessage = (action, error) => {
         init_runtime: "频道初始化失败，请重新尝试。",
         init_create_channel: "创建频道页初始化失败，请刷新后重试。",
         login_with_password: "登录失败，请检查账号和密码后重试。",
+        register_with_password: "注册失败，请检查填写信息后重试。",
         logout: "退出登录失败，请稍后重试。",
         create_channel: "频道创建失败，请稍后重试。",
         send_login_otp: "验证码发送失败，请稍后重试。",

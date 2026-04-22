@@ -29,6 +29,11 @@ export const attachSidebarNavEvents = ({ root, actions }) => {
             return;
         }
 
+        if (action === "search") {
+            actions.requestSearchFocus();
+            return;
+        }
+
         if (action === "toggle-account-menu") {
             actions.toggleAccountMenu();
             return;
@@ -45,12 +50,4 @@ export const attachSidebarNavEvents = ({ root, actions }) => {
         }
     });
 
-    root.addEventListener("input", (event) => {
-        const searchInput = event.target.closest("[data-sidebar-ref='search-input']");
-        if (!searchInput) {
-            return;
-        }
-
-        actions.setFeedSearchQuery(searchInput.value);
-    });
 };

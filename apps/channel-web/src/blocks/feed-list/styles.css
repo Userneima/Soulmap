@@ -1,3 +1,16 @@
+.feed-list {
+    min-height: clamp(28rem, 58vh, 38rem);
+}
+
+.feed-list--guess {
+    min-height: clamp(32rem, 62vh, 42rem);
+}
+
+.feed-list--state {
+    display: grid;
+    align-content: start;
+}
+
 .feed-list__stack {
     display: grid;
     gap: 0;
@@ -214,6 +227,13 @@
 .feed-card,
 .feed-list__state {
     background: transparent;
+}
+
+.feed-list__state {
+    display: grid;
+    align-content: start;
+    min-height: inherit;
+    padding-top: 0.5rem;
 }
 
 .feed-card__header,

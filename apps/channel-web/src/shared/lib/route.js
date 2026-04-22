@@ -26,6 +26,14 @@ export const navigateToChannel = (slug) => {
     window.location.assign(`?channel=${encodeURIComponent(slug)}`);
 };
 
+export const navigateToDemo = () => {
+    if (isJsdomEnvironment()) {
+        window.history.pushState({}, "", "?view=demo");
+        return;
+    }
+    window.location.assign("?view=demo");
+};
+
 export const queueFlashToast = (payload) => {
     window.sessionStorage.setItem(FLASH_TOAST_KEY, JSON.stringify(payload));
 };

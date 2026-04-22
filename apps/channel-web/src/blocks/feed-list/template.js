@@ -134,29 +134,24 @@ const buildPostCard = (post) => `
 `;
 
 export const feedListTemplate = (vm) => {
-    if (vm.mode === "guess-picker") {
-        return buildGuessPicker(vm);
-    }
-
-    if (vm.status === "loading") {
-        return buildStateCard("hourglass_top", "正在加载内容", "正在拉取频道内容，请稍候。");
-    }
-
-    if (vm.status === "error") {
-        return buildStateCard("wifi_off", "内容加载失败", vm.error || "频道内容加载失败，请重试。", "重新加载", "retry");
-    }
-
-    if (vm.status === "empty") {
-        return buildStateCard("forum", "频道里还没有内容", "第一条帖子还没出现，可以直接发一条把频道跑起来。");
-    }
-
-    if (vm.status === "search-empty") {
-        return buildStateCard("search_off", "本频道内没有搜到内容", `没有找到和“${vm.searchQuery}”相关的帖子或评论。`);
-    }
-
-    return `
+    const content = vm.mode === "guess-picker"
+        ? buildGuessPicker(vm)
+        : vm.status === "loading"
+            ? buildStateCard("hourglass_top", "正在加载内容", "正在拉取频道内容，请稍候。")
+            : vm.status === "error"
+                ? buildStateCard("wifi_off", "内容加载失败", vm.error || "频道内容加载失败，请重试。", "重新加载", "retry")
+                : vm.status === "empty"
+                    ? buildStateCard("forum", "频道里还没有内容", "第一条帖子还没出现，可以直接发一条把频道跑起来。")
+                    : vm.status === "search-empty"
+                        ? buildStateCard("search_off", "本频道内没有搜到内容", `没有找到和“${vm.searchQuery}”相关的帖子或评论。`)
+                        : `
         <div class="feed-list__stack">
             ${vm.items.map((item) => buildPostCard(item)).join("")}
+        </div>
+    `;
+    return `
+        <div class="feed-list ${vm.mode === "guess-picker" ? "feed-list--guess" : ""} ${vm.status === "empty" || vm.status === "search-empty" || vm.status === "loading" || vm.status === "error" ? "feed-list--state" : ""}">
+            ${content}
         </div>
     `;
 };

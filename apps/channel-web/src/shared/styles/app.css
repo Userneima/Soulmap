@@ -5,6 +5,11 @@
     background: var(--color-page);
 }
 
+html.app-scroll-locked,
+body.app-scroll-locked {
+    overflow: hidden;
+}
+
 .channel-app__main {
     min-width: 0;
     padding: 0 var(--space-8) var(--space-10);

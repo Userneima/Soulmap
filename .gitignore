@@ -10,3 +10,5 @@ supabase/functions/.env
 .vercel/
 playwright-report/
 test-results/
+docs/product/*.pdf
+scripts/*-shortcut.applescript

@@ -685,7 +685,7 @@ export const createChannelDataService = () => {
         return snapshot;
     };
 
-    const ensureProfile = async () => {
+    const ensureProfile = async (preferredDisplayName = "") => {
         const user = runtimeState.authUser;
         if (!user?.id) {
             return null;
@@ -706,7 +706,7 @@ export const createChannelDataService = () => {
             return existingProfile;
         }
 
-        const fallbackName = user.email ? user.email.split("@")[0] : "";
+        const fallbackName = String(preferredDisplayName || "").trim() || (user.email ? user.email.split("@")[0] : "");
         const { data: createdProfile, error: insertError } = await client
             .from("profiles")
             .insert({
@@ -1460,6 +1460,45 @@ export const createChannelDataService = () => {
 
             const nextSnapshot = await getSessionSnapshot();
             await ensureProfile();
+            return nextSnapshot;
+        },
+        async registerWithPassword(email, password, displayName = "") {
+            const client = getSupabaseClient();
+            const currentSnapshot = await getSessionSnapshot();
+
+            if (currentSnapshot.isAnonymous) {
+                const { error: signOutError } = await client.auth.signOut();
+                if (signOutError) {
+                    throw signOutError;
+                }
+
+                runtimeState.authUser = null;
+                runtimeState.identity = null;
+                runtimeState.aliasProfiles = [];
+            }
+
+            const { data, error } = await client.auth.signUp({
+                email,
+                password,
+                options: {
+                    data: {
+                        display_name: displayName
+                    }
+                }
+            });
+
+            if (error) {
+                throw error;
+            }
+
+            if (!data.session?.user) {
+                const confirmationError = new Error("Supabase email confirmation is still enabled.");
+                confirmationError.code = "auth_email_confirmation_required";
+                throw confirmationError;
+            }
+
+            const nextSnapshot = await getSessionSnapshot();
+            await ensureProfile(displayName);
             return nextSnapshot;
         },
         async upgradeLegacyAnonymousUser(email, token = "") {

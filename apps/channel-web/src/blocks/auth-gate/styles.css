@@ -97,7 +97,7 @@
 }
 
 .auth-gate__primary {
-    width: 100%;
+    min-width: 6rem;
     padding: 0.8rem 1rem;
     background: var(--color-accent);
     color: white;
@@ -119,4 +119,24 @@
     border-radius: 999px;
     background: transparent;
     color: var(--color-text-muted);
+}
+
+.auth-gate__mode-switch {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+}
+
+.auth-gate__text-button {
+    border: none;
+    background: transparent;
+    color: var(--color-text-muted);
+    cursor: pointer;
+    padding: 0.35rem 0.2rem;
+    font: inherit;
+}
+
+.auth-gate__text-button.is-active {
+    color: var(--color-text);
+    font-weight: 600;
 }

@@ -16,6 +16,12 @@ export const authGateTemplate = (vm) => `
                 ` : ""}
             </header>
             <div class="auth-gate__body">
+                ${vm.showDisplayName ? `
+                    <label class="auth-gate__field">
+                        <span>昵称</span>
+                        <input autocomplete="nickname" data-auth-gate-ref="display-name" maxlength="24" placeholder="例如：海屿" type="text" value="${escapeHtml(vm.displayName)}" />
+                    </label>
+                ` : ""}
                 <label class="auth-gate__field">
                     <span>邮箱</span>
                     <input autocomplete="email" data-auth-gate-ref="email" placeholder="name@example.com" type="email" value="${escapeHtml(vm.email)}" />
@@ -27,6 +33,12 @@ export const authGateTemplate = (vm) => `
                 ${vm.error ? `<div class="auth-gate__error">${escapeHtml(vm.error)}</div>` : ""}
             </div>
             <footer class="auth-gate__footer">
+                ${vm.showModeSwitch ? `
+                    <div class="auth-gate__mode-switch">
+                        <button class="auth-gate__text-button ${vm.mode === "login" ? "is-active" : ""}" data-auth-gate-action="switch-login" type="button">登录</button>
+                        <button class="auth-gate__text-button ${vm.mode === "register" ? "is-active" : ""}" data-auth-gate-action="switch-register" type="button">注册</button>
+                    </div>
+                ` : '<div></div>'}
                 <button class="auth-gate__primary" data-auth-gate-action="submit" ${vm.canSubmit ? "" : "disabled"} type="button">${escapeHtml(vm.submitLabel)}</button>
             </footer>
         </div>

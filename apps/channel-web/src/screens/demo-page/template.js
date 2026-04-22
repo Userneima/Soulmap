@@ -1,8 +1,8 @@
-export const channelPageTemplate = () => `
+export const demoPageTemplate = () => `
     <div class="channel-app">
         <aside class="channel-app__sidebar" data-screen-slot="sidebar-nav"></aside>
         <main class="channel-app__main">
-            <div class="channel-app__content channel-page" data-screen-root>
+            <div class="channel-app__content channel-page demo-page" data-screen-root>
                 <div class="channel-page__scroll">
                     <div class="channel-page__top-region">
                         <div class="channel-page__top-inner">
@@ -16,8 +16,6 @@ export const channelPageTemplate = () => `
                             <section class="channel-page__feed" data-screen-slot="feed-list"></section>
                         </div>
                         <aside class="channel-page__aside">
-                            <section class="channel-page__join" data-screen-slot="join-request-panel"></section>
-                            <section class="channel-page__review" data-screen-slot="membership-review-panel"></section>
                             <section class="channel-page__intelligence" data-screen-slot="channel-intelligence"></section>
                         </aside>
                     </div>

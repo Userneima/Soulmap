@@ -5,6 +5,8 @@ import { consumeFlashToast, getAppRoute } from "./shared/lib/route.js";
 import { mountCreateChannelPage } from "./screens/create-channel/index.js";
 import { mountChannelPage } from "./screens/channel-page/index.js";
 import { mountChannelListPage } from "./screens/channel-list/index.js";
+import { mountDemoPage } from "./screens/demo-page/index.js";
+import { createDemoDataService } from "./demo/data-service.js";
 import "./shared/styles/tokens.css";
 import "./shared/styles/foundations.css";
 import "./shared/styles/app.css";
@@ -35,6 +37,32 @@ if (view === "create-channel") {
         actions.showToast(flashToast);
     }
     void actions.initializeCreateChannelPage();
+} else if (view === "demo") {
+    const store = createStore();
+    const actions = createAppActions({
+        store,
+        dataService: createDemoDataService()
+    });
+
+    store.dispatch({
+        type: "feed/set-board",
+        payload: { board: "wish" }
+    });
+    store.dispatch({
+        type: "round/set-stage",
+        payload: {
+            stage: "wish",
+            forceAnonymous: true
+        }
+    });
+
+    mountDemoPage({
+        root: appRoot,
+        store,
+        actions
+    });
+
+    void actions.initializeChannelRuntime();
 } else if (activeChannelSlug) {
     const store = createStore();
     const actions = createAppActions({

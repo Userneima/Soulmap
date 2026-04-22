@@ -22,6 +22,7 @@ export const createInitialState = () => ({
         status: "unknown",
         user: null,
         isAnonymous: false,
+        displayName: "",
         email: "",
         password: "",
         error: null
@@ -136,6 +137,15 @@ export const createInitialState = () => ({
             draftRevealAngel: null,
             draftTheme: ""
         },
+        searchDialog: {
+            open: false,
+            status: "idle",
+            error: null,
+            query: "",
+            sort: "relevant",
+            board: "all",
+            items: []
+        },
         imageLightbox: {
             open: false,
             image: null,
@@ -242,6 +252,15 @@ const cloneState = (state) => ({
         memberList: { ...state.overlayState.memberList },
         channelSettings: { ...state.overlayState.channelSettings },
         channelIntelligence: { ...state.overlayState.channelIntelligence },
+        searchDialog: {
+            ...state.overlayState.searchDialog,
+            items: state.overlayState.searchDialog.items.map((item) => ({
+                ...item,
+                images: [...(item.images || [])],
+                audioClips: [...(item.audioClips || [])],
+                comments: (item.comments || []).map((comment) => ({ ...comment }))
+            }))
+        },
         imageLightbox: {
             ...state.overlayState.imageLightbox,
             image: cloneSimple(state.overlayState.imageLightbox.image)
@@ -378,6 +397,7 @@ const applyAction = (draft, action) => {
         Object.assign(draft.authState, action.payload);
         return;
     case "auth/reset-flow":
+        draft.authState.displayName = "";
         draft.authState.email = "";
         draft.authState.password = "";
         draft.authState.error = null;
@@ -862,6 +882,31 @@ const applyAction = (draft, action) => {
     case "auth-gate/close":
         draft.overlayState.authGate.open = false;
         draft.authState.error = null;
+        return;
+    case "search-dialog/open":
+        draft.overlayState.searchDialog.open = true;
+        if (typeof action.payload?.query === "string") {
+            draft.overlayState.searchDialog.query = action.payload.query;
+        }
+        return;
+    case "search-dialog/close":
+        draft.overlayState.searchDialog.open = false;
+        return;
+    case "search-dialog/set-field":
+        Object.assign(draft.overlayState.searchDialog, action.payload);
+        return;
+    case "search-dialog/load-start":
+        draft.overlayState.searchDialog.status = "loading";
+        draft.overlayState.searchDialog.error = null;
+        return;
+    case "search-dialog/load-success":
+        draft.overlayState.searchDialog.status = "ready";
+        draft.overlayState.searchDialog.error = null;
+        draft.overlayState.searchDialog.items = action.payload.items.map((item) => ({ ...item }));
+        return;
+    case "search-dialog/load-error":
+        draft.overlayState.searchDialog.status = "error";
+        draft.overlayState.searchDialog.error = action.payload.error;
         return;
     case "toast/show":
         draft.overlayState.toast = {

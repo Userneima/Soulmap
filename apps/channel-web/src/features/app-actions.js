@@ -87,7 +87,7 @@ export const createAppActions = ({ store, dataService }) => {
         store.dispatch({ type: "toast/hide" });
     };
 
-    const shellActions = createShellActions({ store });
+    const shellActions = createShellActions({ store, dataService, showToast });
     const feedActions = createFeedActions({ store, dataService, showToast });
     const runtimeActions = createRuntimeActions({ store, dataService, showToast, feedActions });
     const channelCreateActions = createChannelCreateActions({ store, dataService, showToast });
@@ -144,6 +144,10 @@ export const createAppActions = ({ store, dataService }) => {
             }
             if (name === "auth-gate") {
                 this.openAuthGate(payload.mode || "login");
+                return;
+            }
+            if (name === "search-dialog") {
+                void this.openSearchDialog();
             }
         },
         closeOverlay(name) {
@@ -181,6 +185,10 @@ export const createAppActions = ({ store, dataService }) => {
             }
             if (name === "auth-gate") {
                 this.closeAuthGate();
+                return;
+            }
+            if (name === "search-dialog") {
+                this.closeSearchDialog();
             }
         },
         showToast,

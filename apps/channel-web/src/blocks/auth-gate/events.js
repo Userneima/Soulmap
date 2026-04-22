@@ -11,6 +11,16 @@ export const attachAuthGateEvents = ({ root, actions }) => {
             return;
         }
 
+        if (action === "switch-login") {
+            actions.openAuthGate("login");
+            return;
+        }
+
+        if (action === "switch-register") {
+            actions.openAuthGate("register");
+            return;
+        }
+
         if (action === "submit") {
             void actions.submitAuthFlow();
         }
@@ -24,6 +34,11 @@ export const attachAuthGateEvents = ({ root, actions }) => {
 
         if (target.matches("[data-auth-gate-ref='email']")) {
             actions.setAuthField({ email: target.value, error: null });
+            return;
+        }
+
+        if (target.matches("[data-auth-gate-ref='display-name']")) {
+            actions.setAuthField({ displayName: target.value, error: null });
             return;
         }
 

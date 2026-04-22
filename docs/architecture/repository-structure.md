@@ -30,6 +30,15 @@
 - `docs/architecture/channel-web-implementation.md`
 - `docs/architecture/channel-web-modules.md`
 - `docs/architecture/ai-friendly-ui-editing-rules.md`
+- `docs/product/soulmap-assignment.md`
+
+其中：
+
+- `docs/architecture/` 放结构、边界、实现规则
+- `docs/design/` 放视觉和界面原则
+- `docs/deployment/` 放部署基线
+- `docs/product/` 放产品背景、场景和方案说明
+- 产品文档以 Markdown 为源，不把导出 PDF 当作长期维护对象
 
 ### `prototypes/`
 
@@ -38,6 +47,14 @@
 - `prototypes/stitch-v1/`
 
 这些文件只作参考，不再作为继续开发入口。
+
+### `scripts/`
+
+放仓库级辅助脚本，而不是产品代码。
+
+- 这里可以放检查、导入、启动辅助之类的仓库工具
+- 个人本地快捷脚本不要长期纳入版本控制
+- 如果一个脚本没有被 `package.json`、文档或自动化流程引用，就不应该继续留在仓库里
 
 ### `supabase/`
 
