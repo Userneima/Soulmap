@@ -52,6 +52,23 @@
     font-size: 0.8rem;
 }
 
+.composer-panel__disabled-actions {
+    padding-left: 3.05rem;
+}
+
+.composer-panel__disabled-primary {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 2.1rem;
+    padding: 0 0.95rem;
+    border: 1px solid rgba(92, 124, 255, 0.34);
+    border-radius: 999px;
+    background: rgba(92, 124, 255, 0.14);
+    color: rgba(231, 229, 228, 0.94);
+    font-size: 0.82rem;
+}
+
 .composer-panel__stage-lock {
     display: grid;
     gap: 0.22rem;

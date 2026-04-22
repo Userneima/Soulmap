@@ -74,4 +74,26 @@ describe("sidebar nav account menu", () => {
         expect(searchInput).toBeTruthy();
         expect(document.activeElement).toBe(searchInput);
     });
+
+    it("shows a guest login trigger instead of a fake member identity", () => {
+        store.dispatch({
+            type: "auth/set-state",
+            payload: {
+                status: "guest",
+                user: null,
+                isAnonymous: false
+            }
+        });
+        block.render();
+
+        const loginTrigger = root.querySelector("[data-sidebar-action='login']");
+        expect(loginTrigger).toBeTruthy();
+        expect(root.textContent).toContain("未登录");
+        expect(root.textContent).toContain("公开浏览模式");
+
+        loginTrigger.click();
+
+        expect(store.getState().overlayState.authGate.open).toBe(true);
+        expect(store.getState().overlayState.authGate.mode).toBe("login");
+    });
 });

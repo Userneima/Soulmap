@@ -75,6 +75,17 @@ export const createAuthActions = ({ store, dataService, showToast, runtimeAction
                     error: message
                 }
             });
+            store.dispatch({
+                type: "membership/set-state",
+                payload: {
+                    status: "guest",
+                    joinRequest: null,
+                    reviewItems: [],
+                    reviewStatus: "idle",
+                    submitStatus: "idle",
+                    error: null
+                }
+            });
             showToast({
                 tone: "error",
                 message

@@ -34,6 +34,11 @@ export const attachSidebarNavEvents = ({ root, actions }) => {
             return;
         }
 
+        if (action === "login") {
+            actions.openAuthGate("login");
+            return;
+        }
+
         if (action === "logout") {
             actions.setAccountMenuOpen(false);
             void actions.logout();

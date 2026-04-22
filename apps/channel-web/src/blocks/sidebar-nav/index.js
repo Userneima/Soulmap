@@ -27,6 +27,7 @@ export const mountSidebarNavBlock = ({ root, store, actions }) => {
             || previousVM.searchChannelName !== vm.searchChannelName
             || previousVM.searchChannelBadge !== vm.searchChannelBadge
             || previousVM.searchFocusNonce !== vm.searchFocusNonce
+            || previousVM.isAuthenticated !== vm.isAuthenticated
             || previousVM.currentIdentity.name !== vm.currentIdentity.name
             || previousVM.currentIdentity.avatar !== vm.currentIdentity.avatar
             || previousVM.currentUserEmail !== vm.currentUserEmail

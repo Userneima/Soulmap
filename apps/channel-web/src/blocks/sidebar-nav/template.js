@@ -70,9 +70,9 @@ export const sidebarNavTemplate = (vm) => `
         </div>
         <div class="sidebar-nav__footer" data-sidebar-ref="account-shell">
             <button
-                aria-expanded="${vm.accountMenuOpen ? "true" : "false"}"
+                aria-expanded="${vm.isAuthenticated && vm.accountMenuOpen ? "true" : "false"}"
                 class="sidebar-nav__identity"
-                data-sidebar-action="toggle-account-menu"
+                data-sidebar-action="${vm.isAuthenticated ? "toggle-account-menu" : "login"}"
                 type="button"
             >
                 <img alt="${escapeHtml(vm.currentIdentity.name)}" class="sidebar-nav__identity-avatar" src="${vm.currentIdentity.avatar}" />
@@ -80,9 +80,9 @@ export const sidebarNavTemplate = (vm) => `
                     <span class="sidebar-nav__identity-name">${escapeHtml(vm.currentIdentity.name)}</span>
                     ${vm.currentUserEmail ? `<span class="sidebar-nav__identity-email">${escapeHtml(vm.currentUserEmail)}</span>` : ""}
                 </span>
-                <span class="material-icons-outlined sidebar-nav__identity-arrow">${vm.accountMenuOpen ? "expand_less" : "expand_more"}</span>
+                <span class="material-icons-outlined sidebar-nav__identity-arrow">${vm.isAuthenticated ? (vm.accountMenuOpen ? "expand_less" : "expand_more") : "login"}</span>
             </button>
-            ${vm.accountMenuOpen ? `
+            ${vm.isAuthenticated && vm.accountMenuOpen ? `
                 <div class="sidebar-nav__account-menu">
                     <button class="sidebar-nav__account-action" data-sidebar-action="identity" type="button">
                         <span class="material-icons-outlined">badge</span>

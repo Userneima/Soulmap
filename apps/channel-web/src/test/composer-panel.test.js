@@ -95,6 +95,37 @@ describe("composer panel interactions", () => {
         expect(root.querySelector("[data-composer-action='toggle-ai-disclosure']")).toBeNull();
     });
 
+    it("shows a direct login action for guests", () => {
+        store.dispatch({
+            type: "auth/set-state",
+            payload: {
+                status: "guest",
+                user: null,
+                isAnonymous: false
+            }
+        });
+        store.dispatch({
+            type: "membership/set-state",
+            payload: {
+                status: "guest",
+                joinRequest: null,
+                reviewItems: []
+            }
+        });
+
+        block.render();
+
+        const loginButton = root.querySelector("[data-composer-action='open-auth-login']");
+        expect(loginButton).toBeTruthy();
+        expect(root.textContent).toContain("邮箱登录");
+        expect(root.querySelector(".composer-panel__avatar")?.getAttribute("alt")).toBe("未登录");
+
+        loginButton.click();
+
+        expect(store.getState().overlayState.authGate.open).toBe(true);
+        expect(store.getState().overlayState.authGate.mode).toBe("login");
+    });
+
     it("opens mention menu and selects a target member", () => {
         store.dispatch({
             type: "round/set-stage",

@@ -3,9 +3,10 @@ export const selectJoinRequestPanelVM = (state) => {
     const membershipStatus = state.membershipState.status;
     const joinRequest = state.membershipState.joinRequest;
     const isLoggedIn = authStatus === "authenticated";
+    const shouldHidePanel = isLoggedIn && membershipStatus === "approved";
 
     return {
-        visible: state.runtimeState.status !== "loading" && state.runtimeState.status !== "error" && membershipStatus !== "approved",
+        visible: state.runtimeState.status !== "loading" && state.runtimeState.status !== "error" && !shouldHidePanel,
         authStatus,
         membershipStatus,
         draftMessage: state.membershipState.draftMessage,

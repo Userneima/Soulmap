@@ -63,6 +63,11 @@ export const composerPanelTemplate = (vm) => `
                 </div>
             </div>
             <div class="composer-panel__disabled-tip">匿名发帖功能仍在，但只有通过频道审核的成员才能使用。</div>
+            ${vm.gate?.primaryAction && vm.gate?.primaryLabel ? `
+                <div class="composer-panel__disabled-actions">
+                    <button class="composer-panel__disabled-primary" data-composer-action="${escapeHtml(vm.gate.primaryAction)}" type="button">${escapeHtml(vm.gate.primaryLabel)}</button>
+                </div>
+            ` : ""}
         ` : !vm.stageAllowsPosting ? `
             <div class="composer-panel__row composer-panel__row--disabled">
                 <button class="composer-panel__identity" type="button">

@@ -774,6 +774,28 @@ describe("channel feature actions", () => {
         expect(store.getState().authState.status).toBe("authenticated");
     });
 
+    it("resets membership to guest when password login fails", async () => {
+        store.dispatch({
+            type: "auth/set-field",
+            payload: { email: "member@example.com", password: "wrong-pass" }
+        });
+        store.dispatch({
+            type: "membership/set-state",
+            payload: {
+                status: "approved",
+                joinRequest: null,
+                reviewItems: [{ id: "review-1" }]
+            }
+        });
+        dataService.loginWithPassword.mockRejectedValue(new Error("Invalid login credentials"));
+
+        await actions.loginWithPassword();
+
+        expect(store.getState().authState.status).toBe("guest");
+        expect(store.getState().membershipState.status).toBe("guest");
+        expect(store.getState().membershipState.reviewItems).toEqual([]);
+    });
+
     it("submits join request and switches membership to pending", async () => {
         store.dispatch({
             type: "runtime/preview-ready",

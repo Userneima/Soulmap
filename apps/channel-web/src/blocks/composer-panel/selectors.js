@@ -1,4 +1,4 @@
-import { channelBoardChoices, gameBoardStages } from "../../entities/channel/config.js";
+import { channelBoardChoices, channelShellConfig, gameBoardStages } from "../../entities/channel/config.js";
 import { composerIdentityPresets, mentionMembers } from "../../entities/identity/config.js";
 import { composerCapabilityRegistry } from "../../features/composer/registry.js";
 
@@ -16,6 +16,7 @@ const aiDisclosureChoices = [
 const stageByValue = new Map(gameBoardStages.map((stage) => [stage.value, stage]));
 
 export const selectComposerPanelVM = (state) => {
+    const currentChannel = state.runtimeState.channel;
     const stage = stageByValue.get(state.roundState.activeStage) || gameBoardStages[0];
     const activeAlias = state.runtimeState.anonymousProfiles.find((profile) => profile.key === state.runtimeState.activeAliasKey)
         || state.runtimeState.anonymousProfiles[0];
@@ -47,6 +48,11 @@ export const selectComposerPanelVM = (state) => {
     const authStatus = state.authState.status;
     const membershipStatus = state.membershipState.status;
     const canCompose = membershipStatus === "approved" && authStatus === "authenticated";
+    const guestIdentityDisplay = {
+        avatar: currentChannel?.logoUrl || channelShellConfig.channelLogo,
+        name: "未登录",
+        meta: "公开浏览模式"
+    };
     const gateByState = authStatus === "guest"
         ? {
             accessMode: "guest",
@@ -127,7 +133,9 @@ export const selectComposerPanelVM = (state) => {
             && (!stage.requiresMention || Boolean(effectiveMentionTarget))
             && !audioRecording
             && state.composerState.submitStatus !== "submitting",
-        identityDisplay: anonymousMode
+        identityDisplay: authStatus !== "authenticated"
+            ? guestIdentityDisplay
+            : anonymousMode
             ? {
                 avatar: activeAlias?.avatar || "",
                 name: activeAlias?.name || "匿名用户",
