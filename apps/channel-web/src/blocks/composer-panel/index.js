@@ -2,6 +2,7 @@ import "./styles.css";
 import { attachComposerPanelEvents } from "./events.js";
 import { selectComposerPanelVM } from "./selectors.js";
 import { composerPanelTemplate } from "./template.js";
+import { createAudioDraftFromBlob, revokeComposerAudioDraft } from "../../shared/lib/helpers.js";
 
 const renderImages = (container, images) => {
     container.innerHTML = images.map((image) => `
@@ -35,10 +36,119 @@ const syncDraftInputHeight = (input) => {
 
 export const mountComposerPanelBlock = ({ root, store, actions }) => {
     let refs = null;
+    let hasBoundEvents = false;
     let previousCanCompose = null;
     let previousExpanded = null;
     let previousAnonymousMode = null;
     let previousAliasSignature = "";
+    let previousMentionSignature = "";
+    let previousStageSignature = "";
+    let previousClaimSignature = "";
+    let previousAudioSignature = "";
+    let recorder = null;
+    let recorderStream = null;
+    let recorderChunks = [];
+
+    const stopRecorderStream = () => {
+        if (!recorderStream) {
+            return;
+        }
+        recorderStream.getTracks().forEach((track) => track.stop());
+        recorderStream = null;
+    };
+
+    const finishRecording = () => new Promise((resolve) => {
+        if (!recorder || recorder.state === "inactive") {
+            stopRecorderStream();
+            recorder = null;
+            resolve(null);
+            return;
+        }
+
+        recorder.onstop = () => {
+            const nextChunks = [...recorderChunks];
+            recorderChunks = [];
+            stopRecorderStream();
+            recorder = null;
+            const mimeType = nextChunks[0]?.type || "audio/webm";
+            resolve(nextChunks.length ? new Blob(nextChunks, { type: mimeType }) : null);
+        };
+        recorder.stop();
+    });
+
+    const startRecording = async () => {
+        if (recorder?.state === "recording") {
+            return;
+        }
+
+        const mediaDevices = navigator.mediaDevices;
+        if (!mediaDevices?.getUserMedia || typeof MediaRecorder === "undefined") {
+            actions.showToast?.({
+                tone: "info",
+                message: "当前浏览器暂不支持录音。"
+            });
+            return;
+        }
+
+        try {
+            const stream = await mediaDevices.getUserMedia({ audio: true });
+            recorderStream = stream;
+            recorderChunks = [];
+            recorder = new MediaRecorder(stream);
+            recorder.ondataavailable = (event) => {
+                if (event.data?.size) {
+                    recorderChunks.push(event.data);
+                }
+            };
+            recorder.start();
+            store.dispatch({
+                type: "composer/set-recording",
+                payload: {
+                    recording: true,
+                    expand: true
+                }
+            });
+        } catch (error) {
+            stopRecorderStream();
+            recorder = null;
+            recorderChunks = [];
+            actions.showToast?.({
+                tone: "error",
+                message: error?.name === "NotAllowedError"
+                    ? "没有拿到麦克风权限，无法开始录音。"
+                    : "录音启动失败，请稍后再试。"
+            });
+        }
+    };
+
+    const toggleRecording = async () => {
+        if (recorder?.state === "recording") {
+            store.dispatch({
+                type: "composer/set-recording",
+                payload: { recording: false }
+            });
+            const blob = await finishRecording();
+            if (!blob?.size) {
+                return;
+            }
+            const state = store.getState();
+            const nextAudioId = state.composerState.nextAudioId;
+            const previousAudioDraft = state.composerState.audioDraft;
+            if (previousAudioDraft) {
+                revokeComposerAudioDraft(previousAudioDraft);
+            }
+            store.dispatch({
+                type: "composer/set-audio-draft",
+                payload: {
+                    audio: createAudioDraftFromBlob(blob, nextAudioId),
+                    nextAudioId: nextAudioId + 1
+                }
+            });
+            return;
+        }
+
+        await startRecording();
+    };
 
     const ensureRefs = () => {
         refs = {
@@ -58,21 +168,39 @@ export const mountComposerPanelBlock = ({ root, store, actions }) => {
         const fileInput = root.querySelector("[data-ref='image-input']");
         const submitButton = refs.submitButton;
 
-        attachComposerPanelEvents({ root, actions });
-        root.addEventListener("click", (event) => {
-            const removeButton = event.target.closest("[data-remove-image]");
-            if (removeButton) {
-                actions.removeComposerImage(Number(removeButton.dataset.removeImage));
-                return;
+        if (!hasBoundEvents) {
+            attachComposerPanelEvents({ root, actions });
+            root.addEventListener("click", (event) => {
+                const removeButton = event.target.closest("[data-remove-image]");
+                if (removeButton) {
+                    actions.removeComposerImage(Number(removeButton.dataset.removeImage));
+                    return;
+                }
+
+                if (event.target.closest("[data-composer-action='remove-audio']")) {
+                    const audioDraft = store.getState().composerState.audioDraft;
+                    if (audioDraft) {
+                        revokeComposerAudioDraft(audioDraft);
+                    }
+                    store.dispatch({ type: "composer/clear-audio-draft" });
+                    return;
+                }
+
+                if (event.target.closest("[data-composer-action='toggle-recording']")) {
+                    void toggleRecording();
+                    return;
+                }
+
+                if (event.target.closest("[data-ref='submit-button']")) {
+                    void actions.submitPost();
+                }
+            });
+
+            if (fileInput) {
+                fileInput.addEventListener("change", () => {});
             }
 
-            if (submitButton && event.target.closest("[data-ref='submit-button']")) {
-                void actions.submitPost();
-            }
-        });
-
-        if (fileInput) {
-            fileInput.addEventListener("change", () => {});
+            hasBoundEvents = true;
         }
     };
 
@@ -84,7 +212,11 @@ export const mountComposerPanelBlock = ({ root, store, actions }) => {
                 || previousCanCompose !== vm.canCompose
                 || previousExpanded !== vm.expanded
                 || previousAnonymousMode !== vm.anonymousMode
-                || previousAliasSignature !== `${vm.activeAlias?.key || ""}:${vm.activeAlias?.name || ""}:${vm.activeAlias?.avatar || ""}`;
+                || previousStageSignature !== `${vm.stageInfo.value}:${vm.stageAllowsPosting ? 1 : 0}:${vm.anonymousLocked ? 1 : 0}`
+                || previousClaimSignature !== `${vm.claimSelection?.postId || ""}:${vm.claimSelection?.authorName || ""}:${vm.claimSelection?.previewText || ""}`
+                || previousMentionSignature !== `${vm.mentionOpen ? 1 : 0}:${vm.mentionTarget?.name || ""}:${vm.mentionTarget?.avatar || ""}`
+                || previousAliasSignature !== `${vm.activeAlias?.key || ""}:${vm.activeAlias?.name || ""}:${vm.activeAlias?.avatar || ""}`
+                || previousAudioSignature !== `${vm.audioRecording ? 1 : 0}:${vm.audioDraft?.id || ""}:${vm.audioDraft?.url || ""}`;
 
             if (shouldRerenderShell) {
                 root.innerHTML = composerPanelTemplate(vm);
@@ -92,7 +224,11 @@ export const mountComposerPanelBlock = ({ root, store, actions }) => {
                 previousCanCompose = vm.canCompose;
                 previousExpanded = vm.expanded;
                 previousAnonymousMode = vm.anonymousMode;
+                previousStageSignature = `${vm.stageInfo.value}:${vm.stageAllowsPosting ? 1 : 0}:${vm.anonymousLocked ? 1 : 0}`;
+                previousClaimSignature = `${vm.claimSelection?.postId || ""}:${vm.claimSelection?.authorName || ""}:${vm.claimSelection?.previewText || ""}`;
+                previousMentionSignature = `${vm.mentionOpen ? 1 : 0}:${vm.mentionTarget?.name || ""}:${vm.mentionTarget?.avatar || ""}`;
                 previousAliasSignature = `${vm.activeAlias?.key || ""}:${vm.activeAlias?.name || ""}:${vm.activeAlias?.avatar || ""}`;
+                previousAudioSignature = `${vm.audioRecording ? 1 : 0}:${vm.audioDraft?.id || ""}:${vm.audioDraft?.url || ""}`;
                 if (!vm.canCompose) {
                     return;
                 }
@@ -143,7 +279,11 @@ export const mountComposerPanelBlock = ({ root, store, actions }) => {
             previousCanCompose = vm.canCompose;
             previousExpanded = vm.expanded;
             previousAnonymousMode = vm.anonymousMode;
+            previousStageSignature = `${vm.stageInfo.value}:${vm.stageAllowsPosting ? 1 : 0}:${vm.anonymousLocked ? 1 : 0}`;
+            previousClaimSignature = `${vm.claimSelection?.postId || ""}:${vm.claimSelection?.authorName || ""}:${vm.claimSelection?.previewText || ""}`;
+            previousMentionSignature = `${vm.mentionOpen ? 1 : 0}:${vm.mentionTarget?.name || ""}:${vm.mentionTarget?.avatar || ""}`;
             previousAliasSignature = `${vm.activeAlias?.key || ""}:${vm.activeAlias?.name || ""}:${vm.activeAlias?.avatar || ""}`;
+            previousAudioSignature = `${vm.audioRecording ? 1 : 0}:${vm.audioDraft?.id || ""}:${vm.audioDraft?.url || ""}`;
         }
     };
 };

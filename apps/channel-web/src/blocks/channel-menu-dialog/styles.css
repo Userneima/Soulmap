@@ -3,6 +3,7 @@
     inset: 0;
     z-index: 56;
     pointer-events: none;
+    visibility: hidden;
 }
 
 .channel-menu-dialog__backdrop {
@@ -31,6 +32,7 @@
 
 .channel-menu-dialog.is-open {
     pointer-events: auto;
+    visibility: visible;
 }
 
 .channel-menu-dialog.is-open .channel-menu-dialog__backdrop {

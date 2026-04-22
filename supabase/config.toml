@@ -1,0 +1,2 @@
+[functions.anonymous-anonymize]
+verify_jwt = false

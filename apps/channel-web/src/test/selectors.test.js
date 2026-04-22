@@ -7,6 +7,7 @@ import { selectAuthGateVM } from "../blocks/auth-gate/selectors.js";
 import { selectJoinRequestPanelVM } from "../blocks/join-request-panel/selectors.js";
 import { selectNotificationCenterVM } from "../blocks/notification-center/selectors.js";
 import { selectChannelMenuDialogVM } from "../blocks/channel-menu-dialog/selectors.js";
+import { selectChannelIntelligenceVM } from "../blocks/channel-intelligence/selectors.js";
 
 describe("channel view model selectors", () => {
     it("builds anonymous composer vm for approved members", () => {
@@ -22,12 +23,86 @@ describe("channel view model selectors", () => {
         const vm = selectComposerPanelVM(state);
 
         expect(vm.canCompose).toBe(true);
-        expect(vm.placeholder).toContain("匿名");
-        expect(vm.submitLabel).toBe("匿名发表");
+        expect(vm.placeholder).toContain("愿望");
+        expect(vm.submitLabel).toBe("发布愿望");
         expect(vm.canSubmit).toBe(true);
         expect(vm.images).toHaveLength(1);
         expect(vm.autoRotate).toBe(true);
         expect(vm.aiImageReshape).toBe(true);
+    });
+
+    it("requires mention target during delivery stage", () => {
+        const state = createInitialState();
+        state.authState.status = "authenticated";
+        state.membershipState.status = "approved";
+        state.roundState.activeStage = "delivery";
+        state.composerState.draftText = "我已经准备好了";
+
+        const vm = selectComposerPanelVM(state);
+
+        expect(vm.stageInfo.label).toBe("交付");
+        expect(vm.anonymousLocked).toBe(true);
+        expect(vm.canSubmit).toBe(false);
+    });
+
+    it("hydrates delivery target from the selected wish", () => {
+        const state = createInitialState();
+        state.authState.status = "authenticated";
+        state.membershipState.status = "approved";
+        state.roundState.activeStage = "delivery";
+        state.roundState.claimSelection = {
+            postId: "wish-1",
+            authorName: "白榆",
+            authorAvatar: "alias-avatar",
+            previewText: "帮我把知识目录整理一下"
+        };
+        state.composerState.draftText = "我来完成这条";
+
+        const vm = selectComposerPanelVM(state);
+
+        expect(vm.mentionTarget?.name).toBe("白榆");
+        expect(vm.canSubmit).toBe(true);
+    });
+
+    it("allows audio-only drafts to submit and summarizes them correctly", () => {
+        const state = createInitialState();
+        state.authState.status = "authenticated";
+        state.membershipState.status = "approved";
+        state.roundState.activeStage = "guess";
+        state.composerState.mentionTarget = {
+            name: "健",
+            avatar: "alias-avatar"
+        };
+        state.composerState.audioDraft = {
+            id: 1,
+            kind: "audio",
+            name: "语音 1",
+            url: "blob:voice"
+        };
+
+        const vm = selectComposerPanelVM(state);
+
+        expect(vm.canSubmit).toBe(true);
+        expect(vm.collapsedSummary).toBe("已录 1 条语音");
+    });
+
+    it("hydrates guess target and mention title during guess stage", () => {
+        const state = createInitialState();
+        state.authState.status = "authenticated";
+        state.membershipState.status = "approved";
+        state.roundState.activeStage = "guess";
+        state.roundState.guessSelection = {
+            name: "雯子",
+            avatar: "alias-avatar"
+        };
+        state.composerState.draftText = "我觉得就是你";
+
+        const vm = selectComposerPanelVM(state);
+
+        expect(vm.mentionTitle).toBe("你猜的是谁");
+        expect(vm.mentionTarget?.name).toBe("雯子");
+        expect(vm.hideInlineComposer).toBe(true);
+        expect(vm.canSubmit).toBe(true);
     });
 
     it("maps guest viewer into composer gate vm", () => {
@@ -62,6 +137,59 @@ describe("channel view model selectors", () => {
         expect(vm.items[0].isLiked).toBe(true);
     });
 
+    it("exposes claim actions when browsing wishes in claim stage", () => {
+        const state = createInitialState();
+        state.authState.status = "authenticated";
+        state.authState.user = { id: "user-1" };
+        state.membershipState.status = "approved";
+        state.roundState.activeStage = "claim";
+        state.feedState.status = "ready";
+        state.feedState.items = [{
+            id: "wish-1",
+            board: "wish",
+            authorName: "白榆",
+            authorAvatar: "alias-avatar",
+            authorUserId: "user-2",
+            text: "希望有人帮我整理目录",
+            comments: []
+        }];
+
+        const vm = selectFeedListVM(state);
+        expect(vm.items[0].canClaimWish).toBe(true);
+        expect(vm.items[0].claimActionLabel).toBe("选这个愿望");
+    });
+
+    it("renders member candidates instead of posts during guess stage", () => {
+        const state = createInitialState();
+        state.authState.status = "authenticated";
+        state.membershipState.status = "approved";
+        state.roundState.activeStage = "guess";
+        state.roundState.guessExcludedNames = ["苹果"];
+        state.runtimeState.realIdentity.name = "健";
+        state.composerState.mentionTarget = {
+            name: "雯子",
+            avatar: "alias-avatar"
+        };
+        state.composerState.draftText = "";
+        state.feedState.status = "ready";
+        state.feedState.items = [{
+            id: "delivery-1",
+            board: "delivery",
+            authorName: "白榆",
+            text: "@健\n这周结课作业太多了，差点忘了讲故事。",
+            comments: []
+        }];
+
+        const vm = selectFeedListVM(state);
+        expect(vm.mode).toBe("guess-picker");
+        expect(vm.candidates.some((candidate) => candidate.name === "健")).toBe(false);
+        expect(vm.candidates.find((candidate) => candidate.name === "雯子")?.isSelected).toBe(true);
+        expect(vm.candidates.at(-1)?.name).toBe("苹果");
+        expect(vm.candidates.at(-1)?.isExcluded).toBe(true);
+        expect(vm.guessDraftText).toBe("");
+        expect(vm.canSubmitGuess).toBe(true);
+    });
+
     it("adds full entry metadata for long posts", () => {
         const state = createInitialState();
         state.feedState.status = "ready";
@@ -75,6 +203,26 @@ describe("channel view model selectors", () => {
         const vm = selectFeedListVM(state);
         expect(vm.items[0].showFullEntry).toBe(true);
         expect(vm.items[0].previewText.endsWith("...")).toBe(true);
+    });
+
+    it("hides deleted posts from the main feed vm", () => {
+        const state = createInitialState();
+        state.authState.status = "authenticated";
+        state.authState.user = { id: "user-1" };
+        state.membershipState.status = "approved";
+        state.feedState.status = "ready";
+        state.feedState.items = [{
+            id: "1",
+            authorName: "云栖",
+            authorUserId: "user-1",
+            text: "该帖子已删除",
+            isDeleted: true,
+            deletedLabel: "该帖子已删除",
+            comments: []
+        }];
+
+        const vm = selectFeedListVM(state);
+        expect(vm.items).toHaveLength(0);
     });
 
     it("filters feed items by in-channel search query", () => {
@@ -97,6 +245,32 @@ describe("channel view model selectors", () => {
         state.feedState.searchQuery = "不存在";
         state.feedState.items = [
             { id: "1", authorName: "云栖", text: "讨论苹果发布会", comments: [] }
+        ];
+
+        const vm = selectFeedListVM(state);
+        expect(vm.status).toBe("search-empty");
+        expect(vm.items).toHaveLength(0);
+    });
+
+    it("excludes deleted placeholders from in-channel search", () => {
+        const state = createInitialState();
+        state.feedState.status = "ready";
+        state.feedState.searchQuery = "已删除";
+        state.feedState.items = [
+            {
+                id: "1",
+                authorName: "云栖",
+                text: "该帖子已删除",
+                isDeleted: true,
+                deletedLabel: "该帖子已删除",
+                comments: []
+            },
+            {
+                id: "2",
+                authorName: "海屿",
+                text: "正常内容",
+                comments: [{ id: "c1", text: "该评论已删除", isDeleted: true }]
+            }
         ];
 
         const vm = selectFeedListVM(state);
@@ -171,6 +345,61 @@ describe("channel view model selectors", () => {
         expect(vm.comments[2].replyTargetPreview).toBe("第一条");
     });
 
+    it("builds comment-thread summaries for the drawer", () => {
+        const state = createInitialState();
+        state.authState.status = "authenticated";
+        state.membershipState.status = "approved";
+        state.overlayState.comments.open = true;
+        state.overlayState.comments.status = "ready";
+        state.overlayState.comments.post = {
+            id: "post-1",
+            text: "我们要不要把频道归档和知识库目录合并处理？",
+            comments: [
+                { id: "a", authorName: "海屿", text: "我支持先统一知识库目录，不然检索路径会继续分叉。", likes: 3 },
+                { id: "b", authorName: "北桥", text: "担心一次合并太重，迁移成本和旧链接兼容要先想清楚。", likes: 2 }
+            ]
+        };
+
+        const vm = selectCommentDrawerVM(state);
+        expect(vm.threadSummary).toBeTruthy();
+        expect(vm.threadSummary.topicLine).toContain("讨论");
+        expect(vm.threadSummary.unresolvedLine).toContain("还没解决");
+    });
+
+    it("does not render single-post summaries without AI summary data", () => {
+        const state = createInitialState();
+        state.authState.status = "authenticated";
+        state.membershipState.status = "approved";
+        state.overlayState.comments.open = true;
+        state.overlayState.comments.status = "ready";
+        state.overlayState.comments.post = {
+            id: "post-1",
+            board: "delivery",
+            text: "这是一条很长很长的帖子内容，用来验证摘要不再显示在 feed 外层，而是在点击评论或者全文进入内层以后才出现。".repeat(3),
+            comments: []
+        };
+
+        const vm = selectCommentDrawerVM(state);
+        expect(vm.postSummaryLines).toHaveLength(0);
+    });
+
+    it("does not build single-post summaries for wish posts", () => {
+        const state = createInitialState();
+        state.authState.status = "authenticated";
+        state.membershipState.status = "approved";
+        state.overlayState.comments.open = true;
+        state.overlayState.comments.status = "ready";
+        state.overlayState.comments.post = {
+            id: "post-1",
+            board: "wish",
+            text: "这是一条很长很长的许愿内容，但在许愿阶段不应该额外显示单帖摘要。".repeat(3),
+            comments: []
+        };
+
+        const vm = selectCommentDrawerVM(state);
+        expect(vm.postSummaryLines).toHaveLength(0);
+    });
+
     it("exposes comment drawer source and focus target", () => {
         const state = createInitialState();
         state.overlayState.comments.open = true;
@@ -182,6 +411,28 @@ describe("channel view model selectors", () => {
         const vm = selectCommentDrawerVM(state);
         expect(vm.openSource).toBe("comments");
         expect(vm.initialFocusTarget).toBe("comment-input");
+    });
+
+    it("turns deleted post drawer into read-only mode", () => {
+        const state = createInitialState();
+        state.authState.status = "authenticated";
+        state.authState.user = { id: "user-1" };
+        state.membershipState.status = "approved";
+        state.overlayState.comments.open = true;
+        state.overlayState.comments.status = "ready";
+        state.overlayState.comments.post = {
+            id: "post-1",
+            authorUserId: "user-2",
+            text: "该帖子已删除",
+            isDeleted: true,
+            deletedLabel: "该帖子已删除",
+            comments: []
+        };
+
+        const vm = selectCommentDrawerVM(state);
+        expect(vm.canInteract).toBe(false);
+        expect(vm.copyEnabled).toBe(false);
+        expect(vm.accessHint).toContain("原帖已删除");
     });
 
     it("keeps auth gate closed until login is explicitly opened", () => {
@@ -217,9 +468,110 @@ describe("channel view model selectors", () => {
         const notificationVm = selectNotificationCenterVM(state);
         const menuVm = selectChannelMenuDialogVM(state);
 
-        expect(notificationVm.panelStyle).toContain("top:140px");
+        expect(notificationVm.panelStyle).toContain("top:154px");
         expect(notificationVm.panelStyle).toContain("left:");
-        expect(menuVm.panelStyle).toContain("top:146px");
+        expect(menuVm.panelStyle).toContain("top:160px");
         expect(menuVm.panelStyle).toContain("left:");
+    });
+
+    it("builds weekly digest vm from recent feed activity", () => {
+        const state = createInitialState();
+        state.overlayState.channelIntelligence.open = true;
+        state.feedState.items = [
+            {
+                id: "post-1",
+                authorName: "云栖",
+                createdAt: "2026-04-20T10:00:00.000Z",
+                timeLabel: "1天前",
+                text: "继续讨论频道归档、知识库结构和检索入口。",
+                likes: 4,
+                comments: [
+                    { id: "c1", authorName: "海屿", text: "为什么旧链接兼容还没有方案？", likes: 1 }
+                ]
+            },
+            {
+                id: "post-2",
+                authorName: "海屿",
+                createdAt: "2026-04-19T10:00:00.000Z",
+                timeLabel: "2天前",
+                text: "知识库标签结构要不要和频道 board 一一对应？",
+                likes: 2,
+                comments: []
+            }
+        ];
+
+        const vm = selectChannelIntelligenceVM(state);
+        expect(vm.status).toBe("ready");
+        expect(vm.open).toBe(true);
+        expect(vm.topThemes.length).toBeGreaterThan(0);
+        expect(vm.topThemes[0].label.length).toBeGreaterThan(6);
+        expect(vm.topThemes.some((item) => item.label.includes("知识库") || item.label.includes("归档"))).toBe(true);
+        expect(vm.representativePosts.length).toBeGreaterThan(0);
+        expect(vm.compactHint).toContain("点击查看");
+        expect(vm.currentStageLabel).toBe("许愿");
+    });
+
+    it("builds round task summary for channel intelligence", () => {
+        const state = createInitialState();
+        state.roundState.activeStage = "delivery";
+
+        const vm = selectChannelIntelligenceVM(state);
+        expect(vm.currentStageLabel).toBe("交付");
+        expect(vm.currentTaskStatus).toBe("待完成");
+        expect(vm.currentTaskLabel).toContain("To");
+    });
+
+    it("marks delivery stage as done when the current user already posted in delivery", () => {
+        const state = createInitialState();
+        state.roundState.activeStage = "delivery";
+        state.authState.status = "authenticated";
+        state.authState.user = { id: "user-1" };
+        state.feedState.items = [
+            {
+                id: "delivery-1",
+                board: "delivery",
+                authorUserId: "user-1",
+                authorName: "白榆",
+                authorAvatar: "avatar",
+                isDeleted: false,
+                comments: []
+            }
+        ];
+
+        const vm = selectChannelIntelligenceVM(state);
+        expect(vm.currentTaskStatus).toBe("已完成");
+    });
+
+    it("builds reveal result and reveal pairs for channel intelligence", () => {
+        const state = createInitialState();
+        state.roundState.activeStage = "reveal";
+        state.runtimeState.realIdentity = {
+            ...state.runtimeState.realIdentity,
+            name: "章鱼烧",
+            avatar: "octopus-avatar",
+            role: "owner"
+        };
+        state.roundState.guessSelection = {
+            name: "海屿",
+            avatar: "haiyu-avatar"
+        };
+        state.roundState.revealMap = {
+            章鱼烧: {
+                member: {
+                    name: "章鱼烧",
+                    avatar: "octopus-avatar"
+                },
+                angel: {
+                    name: "海屿",
+                    avatar: "haiyu-avatar"
+                }
+            }
+        };
+
+        const vm = selectChannelIntelligenceVM(state);
+        expect(vm.currentTaskStatus).toBe("已完成");
+        expect(vm.revealPairs).toHaveLength(1);
+        expect(vm.revealResult?.actualName).toBe("海屿");
+        expect(vm.revealResult?.isCorrect).toBe(true);
     });
 });

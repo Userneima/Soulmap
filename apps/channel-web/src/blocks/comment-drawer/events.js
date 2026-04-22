@@ -15,6 +15,10 @@ export const attachCommentDrawerEvents = ({ root, actions }) => {
                 void actions.copyCurrentPostBody();
                 return;
             }
+            if (action === "request-delete-post") {
+                actions.requestDeletePost(actions.getActiveCommentsPostId?.() || null);
+                return;
+            }
             if (action === "send") {
                 void actions.submitComment();
                 return;
@@ -42,6 +46,7 @@ export const attachCommentDrawerEvents = ({ root, actions }) => {
         }
 
         const replyButton = event.target.closest("[data-comment-action='reply']");
+        const deleteButton = event.target.closest("[data-comment-action='request-delete']");
         if (replyButton) {
             actions.replyToComment({
                 id: replyButton.dataset.commentId,
@@ -51,9 +56,20 @@ export const attachCommentDrawerEvents = ({ root, actions }) => {
             return;
         }
 
+        if (deleteButton) {
+            actions.requestDeleteComment(deleteButton.dataset.commentId);
+            return;
+        }
+
         const clearReplyButton = event.target.closest("[data-comments-action='clear-reply']");
         if (clearReplyButton) {
             actions.clearCommentReplyTarget();
+            return;
+        }
+
+        const imageButton = event.target.closest("[data-comments-action='open-image']");
+        if (imageButton) {
+            actions.openCurrentDrawerImage(Number(imageButton.dataset.imageIndex || 0));
         }
     });
 

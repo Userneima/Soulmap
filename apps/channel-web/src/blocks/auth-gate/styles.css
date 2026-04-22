@@ -3,10 +3,12 @@
     inset: 0;
     z-index: 70;
     pointer-events: none;
+    visibility: hidden;
 }
 
 .auth-gate.is-open {
     pointer-events: auto;
+    visibility: visible;
 }
 
 .auth-gate__backdrop {

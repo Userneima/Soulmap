@@ -13,7 +13,7 @@ export const selectSidebarNavVM = (state) => {
         baseChannels.unshift({
             name: currentChannel.name,
             badge: (currentChannel.name || "频").slice(0, 1),
-            avatar: channelShellConfig.channelLogo,
+            avatar: currentChannel.logoUrl || channelShellConfig.channelLogo,
             active: true,
             href: `?channel=${encodeURIComponent(currentChannel.slug)}`
         });

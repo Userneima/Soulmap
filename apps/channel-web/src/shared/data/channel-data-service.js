@@ -1,11 +1,17 @@
 import { createClient } from "@supabase/supabase-js";
-import { defaultAnonymousProfiles, defaultRealIdentity } from "../../entities/identity/config.js";
+import { defaultAnonymousProfiles, defaultRealIdentity, mentionMembers } from "../../entities/identity/config.js";
 import { runtimeConfig } from "../config/runtime-config.js";
+import { getPostPreviewText } from "../lib/helpers.js";
 const channelShellCacheTtl = 24 * 60 * 60 * 1000;
 const channelMemberCacheTtl = 10 * 60 * 1000;
+const defaultChannelLogo = "https://lh3.googleusercontent.com/aida-public/AB6AXuDJUmmuvmt3jmrXR6sjC-XgIw7ZpGWHK2ClL0rFR7fWwCkwWqjrmHW39Py4Oi-W0kn2oYCMKoNVvH5vAdlhcYDzUfqmH67hsNpn2JEEuVJNKGnXMflYRLFqtaIpQdlJrUocYHAsapz8CAuaAK8kSS0EGaoQfWEx31DipdiQCFDAFw-1EVVf3XaU8tzBCxY_HmC9peicAbPCoNUtPvO-SwM7dKIClndraRoa0_3S5laPdFIz7G3On8LqOlZSEB-nMy5BSBAljxc7jIw";
+const defaultChannelBackground = "";
+const memberAvatarByName = new Map(mentionMembers.map((member) => [member.name, member.avatar || ""]));
 
-const channelSelectFields = "id, slug, name, description, created_by, preview_visibility, join_policy";
-const identitySelectFields = "id, channel_id, user_id, display_name, avatar_url, role";
+const channelSelectFields = "id, slug, name, description, created_by, preview_visibility, join_policy, current_round_theme, current_round_god_name, current_round_god_avatar, current_reveal_map";
+const minimalChannelSelectFields = "id, slug, name, description, created_by, visibility";
+const identitySelectFields = "id, channel_id, user_id, display_name, avatar_url, role, current_claim_post_id, current_claim_selected_at, current_guess_name, current_guess_avatar, current_guess_selected_at";
+const legacyIdentitySelectFields = "id, channel_id, user_id, display_name, avatar_url, role";
 const aliasSelectFields = "id, slot_key, display_name, avatar_url, status, last_used_at, created_at";
 const joinRequestSelectFields = "id, channel_id, user_id, status, message, review_note, reviewed_by, reviewed_at, created_at, updated_at";
 const commentSelectFields = `
@@ -179,13 +185,87 @@ const normalizeUser = (user) => {
     };
 };
 
+const normalizeRevealParty = (value, fallbackName = "") => {
+    if (!value && !fallbackName) {
+        return null;
+    }
+
+    if (typeof value === "string") {
+        const name = String(value).trim() || String(fallbackName || "").trim();
+        return name
+            ? {
+                name,
+                avatar: ""
+            }
+            : null;
+    }
+
+    if (value && typeof value === "object") {
+        const name = String(
+            value.name
+            || value.memberName
+            || value.display_name
+            || fallbackName
+            || ""
+        ).trim();
+
+        if (!name) {
+            return null;
+        }
+
+        return {
+            name,
+            avatar: String(value.avatar || value.avatarUrl || value.avatar_url || "").trim()
+        };
+    }
+
+    const name = String(fallbackName || "").trim();
+    return name
+        ? {
+            name,
+            avatar: ""
+        }
+        : null;
+};
+
+const normalizeRevealMap = (revealMap) => Object.fromEntries(
+    Object.entries(revealMap && typeof revealMap === "object" ? revealMap : {})
+        .map(([memberName, entry]) => {
+            const normalizedMember = normalizeRevealParty(entry?.member, memberName);
+            const normalizedAngel = normalizeRevealParty(entry?.angel || entry);
+            if (!normalizedMember?.name || !normalizedAngel?.name) {
+                return null;
+            }
+
+            return [
+                normalizedMember.name,
+                {
+                    member: normalizedMember,
+                    angel: normalizedAngel,
+                    updatedAt: entry?.updatedAt || entry?.updated_at || null
+                }
+            ];
+        })
+        .filter(Boolean)
+);
+
 const normalizeChannel = (channel) => ({
     id: channel.id,
     slug: channel.slug,
     name: channel.name,
     description: channel.description || "",
+    logoUrl: channel.logo_url || channel.logoUrl || defaultChannelLogo,
+    backgroundUrl: channel.background_url || channel.backgroundUrl || defaultChannelBackground,
     previewVisibility: channel.preview_visibility || channel.visibility || "private",
     joinPolicy: channel.join_policy || "approval_required",
+    currentRoundTheme: String(channel.current_round_theme || channel.currentRoundTheme || "").trim(),
+    currentRoundGodProfile: channel.current_round_god_name || channel.currentRoundGodName
+        ? {
+            name: channel.current_round_god_name || channel.currentRoundGodName || "",
+            avatar: channel.current_round_god_avatar || channel.currentRoundGodAvatar || ""
+        }
+        : null,
+    currentRevealMap: normalizeRevealMap(channel.current_reveal_map || channel.currentRevealMap),
     isProvisioned: channel.id !== null
 });
 
@@ -208,14 +288,39 @@ const getFallbackAuthor = (type) => ({
     role: "member"
 });
 
-const getAdminRevealIdentity = (aliasSession) => aliasSession?.identity
-    ? {
-        id: aliasSession.identity.id,
-        name: aliasSession.identity.display_name || "频道成员",
-        avatar: aliasSession.identity.avatar_url || "",
-        role: aliasSession.identity.role || "member"
+const extractRevealMeta = (media) => {
+    const items = Array.isArray(media) ? media : [];
+    const revealEntry = items.find((item) => item && typeof item === "object" && String(item.kind || "").trim().toLowerCase() === "reveal_meta");
+    if (!revealEntry?.realName) {
+        return null;
     }
-    : null;
+
+    return {
+        name: String(revealEntry.realName).trim(),
+        avatar: String(revealEntry.realAvatar || memberAvatarByName.get(String(revealEntry.realName).trim()) || "").trim()
+    };
+};
+
+const getAdminRevealIdentity = (aliasSession, media) => {
+    const revealMeta = extractRevealMeta(media);
+    if (revealMeta?.name) {
+        return {
+            id: aliasSession?.identity?.id || null,
+            name: revealMeta.name,
+            avatar: revealMeta.avatar || "",
+            role: aliasSession?.identity?.role || "member"
+        };
+    }
+
+    return aliasSession?.identity
+        ? {
+            id: aliasSession.identity.id,
+            name: aliasSession.identity.display_name || "频道成员",
+            avatar: aliasSession.identity.avatar_url || "",
+            role: aliasSession.identity.role || "member"
+        }
+        : null;
+};
 
 const normalizeCommentRow = (commentRow) => {
     const author = commentRow.identity || commentRow.alias_session || getFallbackAuthor(commentRow.alias_session ? "alias" : "identity");
@@ -240,9 +345,59 @@ const normalizeCommentRow = (commentRow) => {
     };
 };
 
+const normalizeChannelRowCompatibility = (channel) => ({
+    ...channel,
+    preview_visibility: channel.preview_visibility || channel.visibility || "private",
+    join_policy: channel.join_policy || "approval_required",
+    current_round_theme: String(channel.current_round_theme || channel.currentRoundTheme || "").trim(),
+    current_round_god_name: channel.current_round_god_name || channel.currentRoundGodName || null,
+    current_round_god_avatar: channel.current_round_god_avatar || channel.currentRoundGodAvatar || "",
+    current_reveal_map: channel.current_reveal_map && typeof channel.current_reveal_map === "object"
+        ? channel.current_reveal_map
+        : channel.currentRevealMap && typeof channel.currentRevealMap === "object"
+            ? channel.currentRevealMap
+            : {}
+});
+
+const normalizePostMedia = (media) => {
+    const items = Array.isArray(media) ? media : [];
+    const images = [];
+    const audioClips = [];
+
+    items.forEach((item, index) => {
+        if (!item || typeof item !== "object") {
+            return;
+        }
+
+        const normalizedKind = String(item.kind || "").trim().toLowerCase();
+        if (normalizedKind === "audio") {
+            audioClips.push({
+                id: item.id || `audio-${index}`,
+                kind: "audio",
+                name: item.name || `语音 ${index + 1}`,
+                url: item.url || "",
+                mimeType: item.mimeType || "audio/webm"
+            });
+            return;
+        }
+
+        if (normalizedKind === "image" || !normalizedKind) {
+            images.push({
+                id: item.id || `image-${index}`,
+                kind: "image",
+                name: item.name || `图片 ${index + 1}`,
+                url: item.url || ""
+            });
+        }
+    });
+
+    return { images, audioClips };
+};
+
 const normalizePostRow = (postRow) => {
     const author = postRow.identity || postRow.alias_session || getFallbackAuthor(postRow.alias_session ? "alias" : "identity");
     const isDeleted = Boolean(postRow.deleted_at);
+    const media = normalizePostMedia(postRow.media);
     const comments = [...(postRow.comments || [])]
         .sort((left, right) => Date.parse(left.created_at) - Date.parse(right.created_at))
         .map(normalizeCommentRow);
@@ -252,8 +407,10 @@ const normalizePostRow = (postRow) => {
         authorName: author.display_name || "频道成员",
         authorAvatar: author.avatar_url || "",
         authorUserId: author.user_id || author.identity?.user_id || null,
+        createdAt: postRow.created_at,
         text: isDeleted ? "该帖子已删除" : postRow.body,
-        images: isDeleted ? [] : [...(postRow.media || [])],
+        images: isDeleted ? [] : media.images,
+        audioClips: isDeleted ? [] : media.audioClips,
         board: postRow.board_slug || "none",
         isAnonymous: !postRow.identity,
         isDeleted,
@@ -269,7 +426,41 @@ const normalizePostRow = (postRow) => {
         shares: isDeleted ? 0 : postRow.shares_count,
         comments,
         aiDisclosure: isDeleted ? "none" : (postRow.ai_disclosure || "none"),
-        adminRevealIdentity: getAdminRevealIdentity(postRow.alias_session)
+        adminRevealIdentity: getAdminRevealIdentity(postRow.alias_session, postRow.media)
+    };
+};
+
+const buildClaimSelectionFromPost = (post) => {
+    if (!post?.id) {
+        return null;
+    }
+
+    const preview = getPostPreviewText(post, 88);
+    return {
+        postId: post.id,
+        board: post.board || "wish",
+        authorName: post.authorName || "匿名成员",
+        authorAvatar: post.authorAvatar || "",
+        previewText: preview.text || "",
+        createdAt: post.createdAt || new Date().toISOString()
+    };
+};
+
+const normalizeClaimSelection = (post) => {
+    const selection = buildClaimSelectionFromPost(post);
+    return selection?.postId ? selection : null;
+};
+
+const normalizeGuessSelection = (selection) => {
+    const normalized = normalizeRevealParty(selection);
+    if (!normalized?.name) {
+        return null;
+    }
+
+    return {
+        name: normalized.name,
+        avatar: normalized.avatar || "",
+        selectedAt: selection?.selectedAt || selection?.selected_at || null
     };
 };
 
@@ -412,9 +603,14 @@ export const createChannelDataService = () => {
         slug,
         name: runtimeConfig.channelName || slug,
         description: "",
+        logo_url: defaultChannelLogo,
+        background_url: defaultChannelBackground,
         created_by: null,
         preview_visibility: "public",
-        join_policy: "approval_required"
+        join_policy: "approval_required",
+        current_round_theme: "",
+        current_round_god_name: null,
+        current_round_god_avatar: ""
     });
 
     const getUserCacheKey = (snapshot) => {
@@ -422,6 +618,30 @@ export const createChannelDataService = () => {
             return "guest";
         }
         return snapshot.user.id;
+    };
+
+    const syncChannelCaches = async (channelRow) => {
+        const normalizedRow = normalizeChannelRowCompatibility(channelRow);
+        const slug = normalizedRow.slug || runtimeConfig.channelSlug || "";
+        runtimeState.channel = normalizedRow;
+        writeSessionCache(getChannelShellCacheKey(slug), normalizedRow);
+
+        const snapshot = await getSessionSnapshot();
+        const memberCacheKey = getChannelMemberCacheKey(slug, getUserCacheKey(snapshot));
+        const cachedMember = readSessionCache(memberCacheKey, channelMemberCacheTtl);
+        if (!cachedMember?.memberRuntime) {
+            return normalizedRow;
+        }
+
+        writeSessionCache(memberCacheKey, {
+            ...cachedMember,
+            memberRuntime: {
+                ...cachedMember.memberRuntime,
+                channel: normalizeChannel(normalizedRow)
+            }
+        });
+
+        return normalizedRow;
     };
 
     const getShellChannel = (slug = runtimeConfig.channelSlug || "") => {
@@ -590,6 +810,69 @@ export const createChannelDataService = () => {
         return cachePosts((response.data || []).map(normalizePostRow));
     };
 
+    const fetchPostById = async (channelId, postId) => {
+        const client = getSupabaseClient();
+        let response = await client
+            .from("posts")
+            .select(postSelectFields)
+            .eq("id", postId)
+            .eq("channel_id", channelId)
+            .single();
+
+        if (response.error && isSchemaCompatibilityError(response.error)) {
+            response = await client
+                .from("posts")
+                .select(legacyPostSelectFields)
+                .eq("id", postId)
+                .eq("channel_id", channelId)
+                .single();
+        }
+
+        if (response.error) {
+            throw response.error;
+        }
+
+        const post = normalizePostRow(response.data);
+        postCache.set(post.id, post);
+        return post;
+    };
+
+    const fetchIdentityRow = async ({ identityId = null, channelId = null, userId = null }) => {
+        const client = getSupabaseClient();
+        const runQuery = (selectFields) => {
+            let query = client
+                .from("identities")
+                .select(selectFields);
+
+            if (identityId) {
+                return query.eq("id", identityId).single();
+            }
+
+            return query
+                .eq("channel_id", channelId)
+                .eq("user_id", userId)
+                .single();
+        };
+
+        let response = await runQuery(identitySelectFields);
+        if (response.error && isSchemaCompatibilityError(response.error)) {
+            response = await runQuery(legacyIdentitySelectFields);
+        }
+
+        if (response.error) {
+            throw response.error;
+        }
+
+        return {
+            current_claim_post_id: null,
+            current_claim_selected_at: null,
+            current_guess_name: null,
+            current_guess_avatar: null,
+            current_guess_selected_at: null,
+            ...response.data
+        };
+    };
+
     const countPublicPosts = async (channelId) => {
         const client = getSupabaseClient();
         const { data, error } = await client
@@ -688,7 +971,7 @@ export const createChannelDataService = () => {
             } else {
                 const fallbackResponse = await client
                     .from("channels")
-                    .select("id, slug, name, description, created_by, visibility")
+                    .select(minimalChannelSelectFields)
                     .eq("slug", slug)
                     .single();
 
@@ -699,18 +982,15 @@ export const createChannelDataService = () => {
                         throw fallbackResponse.error;
                     }
                 } else {
-                    channelRow = {
-                        ...fallbackResponse.data,
-                        preview_visibility: fallbackResponse.data.visibility || "private",
-                        join_policy: "approval_required"
-                    };
+                    channelRow = normalizeChannelRowCompatibility(fallbackResponse.data);
                 }
             }
         }
 
-        runtimeState.channel = channelRow;
-        writeSessionCache(getChannelShellCacheKey(slug), channelRow);
-        return channelRow;
+        const normalizedRow = normalizeChannelRowCompatibility(channelRow);
+        runtimeState.channel = normalizedRow;
+        writeSessionCache(getChannelShellCacheKey(slug), normalizedRow);
+        return normalizedRow;
     };
 
     const buildMembershipSnapshot = async (channelId, snapshot, { includeReviewItems = true } = {}) => {
@@ -782,31 +1062,11 @@ export const createChannelDataService = () => {
         }
 
         const client = getSupabaseClient();
-        let identity = null;
-
-        if (membership.identityId) {
-            identity = {
-                id: membership.identityId,
-                channel_id: channelRow.id,
-                user_id: snapshot.user.id,
-                display_name: membership.displayName || defaultRealIdentity.name,
-                avatar_url: membership.avatarUrl || defaultRealIdentity.avatar,
-                role: membership.role || "member"
-            };
-        } else {
-            const { data: identityRow, error: identityError } = await client
-                .from("identities")
-                .select(identitySelectFields)
-                .eq("channel_id", channelRow.id)
-                .eq("user_id", snapshot.user.id)
-                .single();
-
-            if (identityError) {
-                throw identityError;
-            }
-
-            identity = identityRow;
-        }
+        const identity = await fetchIdentityRow({
+            identityId: membership.identityId || null,
+            channelId: channelRow.id,
+            userId: snapshot.user.id
+        });
 
         let aliasRows = [];
         if (allowEnsureAliases) {
@@ -840,6 +1100,19 @@ export const createChannelDataService = () => {
 
         runtimeState.identity = identity;
         runtimeState.aliasProfiles = mapAliasProfiles(aliasRows);
+        let claimSelection = null;
+        if (identity.current_claim_post_id) {
+            try {
+                const selectedWishPost = await fetchPostById(channelRow.id, identity.current_claim_post_id);
+                if (!selectedWishPost.isDeleted && selectedWishPost.board === "wish") {
+                    claimSelection = normalizeClaimSelection(selectedWishPost);
+                }
+            } catch (error) {
+                if (!isSchemaCompatibilityError(error) && String(error?.code || "") !== "PGRST116") {
+                    throw error;
+                }
+            }
+        }
 
         return {
             channel: normalizeChannel(channelRow),
@@ -848,13 +1121,24 @@ export const createChannelDataService = () => {
                 name: identity.display_name || defaultRealIdentity.name,
                 avatar: identity.avatar_url || defaultRealIdentity.avatar,
                 meta: defaultRealIdentity.meta,
-                role: identity.role
+                role: identity.role,
+                currentGuess: normalizeGuessSelection({
+                    name: identity.current_guess_name,
+                    avatar: identity.current_guess_avatar || "",
+                    selectedAt: identity.current_guess_selected_at || null
+                })
             },
             anonymousProfiles: runtimeState.aliasProfiles,
             activeAliasKey: runtimeState.aliasProfiles.find((profile) => profile.status === "active" && profile.id)?.key
                 || runtimeState.aliasProfiles[0]?.key
                 || defaultAnonymousProfiles[0]?.key
-                || null
+                || null,
+            claimSelection,
+            guessSelection: normalizeGuessSelection({
+                name: identity.current_guess_name,
+                avatar: identity.current_guess_avatar || "",
+                selectedAt: identity.current_guess_selected_at || null
+            })
         };
     };
 
@@ -1013,7 +1297,7 @@ export const createChannelDataService = () => {
 
                 const fallbackResponse = await client
                     .from("channels")
-                    .select("id, slug, name, description, created_by, visibility")
+                    .select(minimalChannelSelectFields)
                     .eq("visibility", "public")
                     .order("created_at", { ascending: true });
 
@@ -1021,13 +1305,9 @@ export const createChannelDataService = () => {
                     throw fallbackResponse.error;
                 }
 
-                rows = (fallbackResponse.data || []).map((channel) => ({
-                    ...channel,
-                    preview_visibility: channel.visibility || "public",
-                    join_policy: "approval_required"
-                }));
+                rows = (fallbackResponse.data || []).map(normalizeChannelRowCompatibility);
             } else {
-                rows = response.data || [];
+                rows = (response.data || []).map(normalizeChannelRowCompatibility);
             }
 
             if (!rows.length && runtimeConfig.channelSlug) {
@@ -1112,7 +1392,7 @@ export const createChannelDataService = () => {
                         avatar_url: profile?.avatar_url || null,
                         role: "owner"
                     })
-                    .select(identitySelectFields)
+                    .select(legacyIdentitySelectFields)
                     .single();
 
                 if (identityError) {
@@ -1328,30 +1608,7 @@ export const createChannelDataService = () => {
                 return cachedPost;
             }
 
-            const client = getSupabaseClient();
-            let response = await client
-                .from("posts")
-                .select(postSelectFields)
-                .eq("id", postId)
-                .eq("channel_id", runtimeState.channel.id)
-                .single();
-
-            if (response.error && isSchemaCompatibilityError(response.error)) {
-                response = await client
-                    .from("posts")
-                    .select(legacyPostSelectFields)
-                    .eq("id", postId)
-                    .eq("channel_id", runtimeState.channel.id)
-                    .single();
-            }
-
-            if (response.error) {
-                throw response.error;
-            }
-
-            const post = normalizePostRow(response.data);
-            postCache.set(post.id, post);
-            return post;
+            return fetchPostById(runtimeState.channel.id, postId);
         },
         async publishPost(input) {
             const client = getSupabaseClient();
@@ -1363,7 +1620,7 @@ export const createChannelDataService = () => {
                     channel_id: channel.id,
                     board_slug: input.boardSlug || null,
                     body: input.body,
-                    media: input.images || [],
+                    media: input.media || input.images || [],
                     ai_disclosure: input.aiDisclosure || "none",
                     ...authorReference
                 })
@@ -1570,6 +1827,254 @@ export const createChannelDataService = () => {
                 avatar: data.avatar_url || input.avatarUrl || defaultRealIdentity.avatar,
                 meta: input.meta || defaultRealIdentity.meta,
                 role: data.role
+            };
+        },
+        async updateChannel(input) {
+            const channel = ensureLoadedChannel();
+            const client = getSupabaseClient();
+            const nextName = String(input.name || channel.name || "").trim();
+            const nextDescription = String(input.description ?? channel.description ?? "").trim();
+            const nextLogoUrl = input.logoUrl === ""
+                ? defaultChannelLogo
+                : String(input.logoUrl || channel.logo_url || channel.logoUrl || defaultChannelLogo);
+            const nextBackgroundUrl = input.backgroundUrl === ""
+                ? defaultChannelBackground
+                : String(input.backgroundUrl || channel.background_url || channel.backgroundUrl || defaultChannelBackground);
+
+            if (!nextName) {
+                throw new Error("请输入频道名称。");
+            }
+
+            let nextChannelRow = {
+                ...channel,
+                name: nextName,
+                description: nextDescription,
+                logo_url: nextLogoUrl,
+                background_url: nextBackgroundUrl
+            };
+
+            if (channel.id) {
+                const { data, error } = await client
+                    .from("channels")
+                    .update({
+                        name: nextName,
+                        description: nextDescription || null
+                    })
+                    .eq("id", channel.id)
+                    .select(channelSelectFields)
+                    .single();
+
+                if (error && !isSchemaCompatibilityError(error)) {
+                    throw error;
+                }
+
+                if (data) {
+                    nextChannelRow = {
+                        ...data,
+                        logo_url: nextLogoUrl,
+                        background_url: nextBackgroundUrl
+                    };
+                }
+            }
+
+            const syncedChannelRow = await syncChannelCaches(nextChannelRow);
+
+            return normalizeChannel(syncedChannelRow);
+        },
+        async updateChannelRoundState(input) {
+            const channel = ensureLoadedChannel();
+            const client = getSupabaseClient();
+            const nextTheme = input.theme === undefined
+                ? String(channel.current_round_theme || channel.currentRoundTheme || "").trim()
+                : String(input.theme || "").trim();
+            const nextGodName = input.godProfile === undefined
+                ? channel.current_round_god_name || channel.currentRoundGodName || null
+                : String(input.godProfile?.name || "").trim() || null;
+            const nextGodAvatar = input.godProfile === undefined
+                ? channel.current_round_god_avatar || channel.currentRoundGodAvatar || ""
+                : String(input.godProfile?.avatar || "").trim();
+            const nextRevealMap = input.revealMap === undefined
+                ? normalizeRevealMap(channel.current_reveal_map || channel.currentRevealMap)
+                : normalizeRevealMap(input.revealMap);
+
+            if (!channel.id) {
+                throw new Error("频道还没有初始化到数据库。");
+            }
+
+            let nextChannelRow = {
+                ...channel,
+                current_round_theme: nextTheme,
+                current_round_god_name: nextGodName,
+                current_round_god_avatar: nextGodAvatar,
+                current_reveal_map: nextRevealMap
+            };
+
+            const { data, error } = await client
+                .from("channels")
+                .update({
+                    current_round_theme: nextTheme || null,
+                    current_round_god_name: nextGodName,
+                    current_round_god_avatar: nextGodAvatar || null,
+                    current_reveal_map: nextRevealMap,
+                    updated_at: new Date().toISOString()
+                })
+                .eq("id", channel.id)
+                .select(channelSelectFields)
+                .single();
+
+            if (error) {
+                if (isSchemaCompatibilityError(error)) {
+                    throw new Error("频道轮次字段还没同步到数据库，请先应用最新 migration。");
+                }
+                throw error;
+            }
+
+            if (data) {
+                nextChannelRow = {
+                    ...channel,
+                    ...data,
+                    logo_url: channel.logo_url || channel.logoUrl || defaultChannelLogo,
+                    background_url: channel.background_url || channel.backgroundUrl || defaultChannelBackground
+                };
+            }
+
+            const syncedChannelRow = await syncChannelCaches(nextChannelRow);
+
+            return normalizeChannel(syncedChannelRow);
+        },
+        async saveClaimSelection(post) {
+            if (!runtimeState.channel?.id || !runtimeState.authUser?.id || !runtimeState.identity?.id) {
+                throw new Error("频道成员状态还没有初始化完成。");
+            }
+
+            const channel = ensureLoadedChannel();
+            const selectedWishPost = await fetchPostById(channel.id, post?.id);
+            if (selectedWishPost.isDeleted || selectedWishPost.board !== "wish") {
+                throw new Error("当前愿望内容无效，无法选择。");
+            }
+
+            if (selectedWishPost.authorUserId === runtimeState.authUser.id) {
+                throw new Error("不能选择自己发的愿望。");
+            }
+
+            const client = getSupabaseClient();
+            const { error } = await client
+                .from("identities")
+                .update({
+                    current_claim_post_id: selectedWishPost.id,
+                    current_claim_selected_at: new Date().toISOString()
+                })
+                .eq("id", runtimeState.identity.id);
+
+            if (error) {
+                if (isSchemaCompatibilityError(error)) {
+                    throw new Error("选愿望字段还没同步到数据库，请先应用最新 migration。");
+                }
+                throw error;
+            }
+
+            runtimeState.identity = {
+                ...runtimeState.identity,
+                current_claim_post_id: selectedWishPost.id,
+                current_claim_selected_at: new Date().toISOString()
+            };
+
+            const selection = normalizeClaimSelection(selectedWishPost);
+            return selection;
+        },
+        async clearClaimSelection() {
+            if (!runtimeState.channel?.id || !runtimeState.authUser?.id || !runtimeState.identity?.id) {
+                return;
+            }
+
+            const client = getSupabaseClient();
+            const { error } = await client
+                .from("identities")
+                .update({
+                    current_claim_post_id: null,
+                    current_claim_selected_at: null
+                })
+                .eq("id", runtimeState.identity.id);
+
+            if (error && !isSchemaCompatibilityError(error)) {
+                throw error;
+            }
+
+            runtimeState.identity = {
+                ...runtimeState.identity,
+                current_claim_post_id: null,
+                current_claim_selected_at: null
+            };
+        },
+        async saveGuessSelection(member) {
+            if (!runtimeState.authUser?.id || !runtimeState.identity?.id) {
+                throw new Error("频道成员状态还没有初始化完成。");
+            }
+
+            const selection = normalizeGuessSelection(member);
+            if (!selection?.name) {
+                throw new Error("先选择你猜的是谁。");
+            }
+
+            const currentName = String(runtimeState.identity.display_name || runtimeState.realIdentity?.name || "").trim();
+            if (currentName && selection.name === currentName) {
+                throw new Error("不能把自己设成猜测对象。");
+            }
+
+            const client = getSupabaseClient();
+            const selectedAt = new Date().toISOString();
+            const { error } = await client
+                .from("identities")
+                .update({
+                    current_guess_name: selection.name,
+                    current_guess_avatar: selection.avatar || null,
+                    current_guess_selected_at: selectedAt
+                })
+                .eq("id", runtimeState.identity.id);
+
+            if (error) {
+                if (isSchemaCompatibilityError(error)) {
+                    throw new Error("猜测字段还没同步到数据库，请先应用最新 migration。");
+                }
+                throw error;
+            }
+
+            runtimeState.identity = {
+                ...runtimeState.identity,
+                current_guess_name: selection.name,
+                current_guess_avatar: selection.avatar || "",
+                current_guess_selected_at: selectedAt
+            };
+
+            return {
+                ...selection,
+                selectedAt
+            };
+        },
+        async clearGuessSelection() {
+            if (!runtimeState.authUser?.id || !runtimeState.identity?.id) {
+                return;
+            }
+
+            const client = getSupabaseClient();
+            const { error } = await client
+                .from("identities")
+                .update({
+                    current_guess_name: null,
+                    current_guess_avatar: null,
+                    current_guess_selected_at: null
+                })
+                .eq("id", runtimeState.identity.id);
+
+            if (error && !isSchemaCompatibilityError(error)) {
+                throw error;
+            }
+
+            runtimeState.identity = {
+                ...runtimeState.identity,
+                current_guess_name: null,
+                current_guess_avatar: null,
+                current_guess_selected_at: null
             };
         }
     };

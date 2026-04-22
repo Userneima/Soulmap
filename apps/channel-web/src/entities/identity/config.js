@@ -31,20 +31,56 @@ export const defaultAnonymousProfiles = [
 
 export const mentionMembers = [
     {
-        name: "小灰灰",
+        name: "雯子",
         avatar: defaultAnonymousProfiles[0].avatar
     },
     {
-        name: "频道用户_9989",
+        name: "咪咪",
         avatar: defaultAnonymousProfiles[1].avatar
     },
     {
-        name: "ovo",
+        name: "想想",
         avatar: defaultAnonymousProfiles[2].avatar
     },
     {
-        name: "频道用户_5247",
+        name: "苹果",
         avatar: defaultAnonymousProfiles[3].avatar
+    },
+    {
+        name: "章鱼烧",
+        avatar: defaultAnonymousProfiles[0].avatar
+    },
+    {
+        name: "小乌龟",
+        avatar: defaultAnonymousProfiles[1].avatar
+    },
+    {
+        name: "健",
+        avatar: defaultAnonymousProfiles[2].avatar
+    },
+    {
+        name: "鱼",
+        avatar: defaultAnonymousProfiles[3].avatar
+    },
+    {
+        name: "饼干",
+        avatar: defaultAnonymousProfiles[0].avatar
+    },
+    {
+        name: "kk",
+        avatar: defaultAnonymousProfiles[1].avatar
+    },
+    {
+        name: "阿豹",
+        avatar: defaultAnonymousProfiles[2].avatar
+    },
+    {
+        name: "Trytry",
+        avatar: defaultAnonymousProfiles[3].avatar
+    },
+    {
+        name: "瓜子",
+        avatar: defaultAnonymousProfiles[0].avatar
     }
 ];
 

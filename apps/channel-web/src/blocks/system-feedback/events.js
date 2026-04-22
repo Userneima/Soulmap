@@ -13,6 +13,24 @@ export const attachSystemFeedbackEvents = ({ root, actions }) => {
 
         if (action === "hide-toast") {
             actions.hideToast();
+            return;
+        }
+
+        if (action === "cancel-delete") {
+            actions.cancelDeleteConfirm();
+            return;
+        }
+
+        if (action === "confirm-delete") {
+            const deleteConfirm = actions.getDeleteConfirmState?.();
+            if (deleteConfirm?.targetType === "post") {
+                void actions.confirmDeletePost(deleteConfirm.targetId);
+                return;
+            }
+
+            if (deleteConfirm?.targetType === "comment") {
+                void actions.confirmDeleteComment(deleteConfirm.targetId);
+            }
         }
     });
 };

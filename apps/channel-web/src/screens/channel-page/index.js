@@ -7,8 +7,12 @@ import { mountFeedListBlock } from "../../blocks/feed-list/index.js";
 import { mountJoinRequestPanelBlock } from "../../blocks/join-request-panel/index.js";
 import { mountMembershipReviewPanelBlock } from "../../blocks/membership-review-panel/index.js";
 import { mountCommentDrawerBlock } from "../../blocks/comment-drawer/index.js";
+import { mountImageLightboxBlock } from "../../blocks/image-lightbox/index.js";
+import { mountChannelIntelligenceBlock } from "../../blocks/channel-intelligence/index.js";
 import { mountNotificationCenterBlock } from "../../blocks/notification-center/index.js";
+import { mountMemberListDialogBlock } from "../../blocks/member-list-dialog/index.js";
 import { mountChannelMenuDialogBlock } from "../../blocks/channel-menu-dialog/index.js";
+import { mountChannelSettingsDialogBlock } from "../../blocks/channel-settings-dialog/index.js";
 import { mountIdentityDialogBlock } from "../../blocks/identity-dialog/index.js";
 import { mountAuthGateBlock } from "../../blocks/auth-gate/index.js";
 import { mountSystemFeedbackBlock } from "../../blocks/system-feedback/index.js";
@@ -22,11 +26,15 @@ export const mountChannelPage = ({ root, store, actions }) => {
         boardTabs: root.querySelector('[data-screen-slot="board-tabs"]'),
         joinRequestPanel: root.querySelector('[data-screen-slot="join-request-panel"]'),
         membershipReviewPanel: root.querySelector('[data-screen-slot="membership-review-panel"]'),
+        channelIntelligence: root.querySelector('[data-screen-slot="channel-intelligence"]'),
         composerPanel: root.querySelector('[data-screen-slot="composer-panel"]'),
         feedList: root.querySelector('[data-screen-slot="feed-list"]'),
         commentDrawer: root.querySelector('[data-screen-slot="comment-drawer"]'),
+        imageLightbox: root.querySelector('[data-screen-slot="image-lightbox"]'),
         notificationCenter: root.querySelector('[data-screen-slot="notification-center"]'),
+        memberListDialog: root.querySelector('[data-screen-slot="member-list-dialog"]'),
         channelMenuDialog: root.querySelector('[data-screen-slot="channel-menu-dialog"]'),
+        channelSettingsDialog: root.querySelector('[data-screen-slot="channel-settings-dialog"]'),
         identityDialog: root.querySelector('[data-screen-slot="identity-dialog"]'),
         authGate: root.querySelector('[data-screen-slot="auth-gate"]'),
         systemFeedback: root.querySelector('[data-screen-slot="system-feedback"]')
@@ -40,11 +48,15 @@ export const mountChannelPage = ({ root, store, actions }) => {
         mountBoardTabsBlock({ root: blockSlots.boardTabs, store, actions }),
         mountJoinRequestPanelBlock({ root: blockSlots.joinRequestPanel, store, actions }),
         mountMembershipReviewPanelBlock({ root: blockSlots.membershipReviewPanel, store, actions }),
+        mountChannelIntelligenceBlock({ root: blockSlots.channelIntelligence, store, actions }),
         mountComposerPanelBlock({ root: blockSlots.composerPanel, store, actions }),
         mountFeedListBlock({ root: blockSlots.feedList, store, actions }),
         mountCommentDrawerBlock({ root: blockSlots.commentDrawer, store, actions }),
+        mountImageLightboxBlock({ root: blockSlots.imageLightbox, store, actions }),
         mountNotificationCenterBlock({ root: blockSlots.notificationCenter, store, actions }),
+        mountMemberListDialogBlock({ root: blockSlots.memberListDialog, store, actions }),
         mountChannelMenuDialogBlock({ root: blockSlots.channelMenuDialog, store, actions }),
+        mountChannelSettingsDialogBlock({ root: blockSlots.channelSettingsDialog, store, actions }),
         mountIdentityDialogBlock({ root: blockSlots.identityDialog, store, actions }),
         mountAuthGateBlock({ root: blockSlots.authGate, store, actions }),
         mountSystemFeedbackBlock({ root: blockSlots.systemFeedback, store, actions })
@@ -80,10 +92,15 @@ export const mountChannelPage = ({ root, store, actions }) => {
             return;
         }
         actions.closeOverlay("comments");
+        actions.closeOverlay("image-lightbox");
         actions.closeOverlay("notification-center");
+        actions.closeOverlay("member-list");
+        actions.closeOverlay("channel-intelligence");
         actions.closeOverlay("channel-menu");
+        actions.closeOverlay("channel-settings");
         actions.closeOverlay("identity");
         actions.closeOverlay("auth-gate");
+        actions.cancelDeleteConfirm?.();
         actions.setSidebarOpen(false);
         actions.setAccountMenuOpen(false);
         actions.hideToast();

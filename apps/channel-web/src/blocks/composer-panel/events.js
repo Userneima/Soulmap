@@ -8,6 +8,9 @@ export const attachComposerPanelEvents = ({ root, actions }) => {
         if (!target.closest(".composer-panel__disclosure-wrap")) {
             actions.closeAiDisclosureMenu();
         }
+        if (!target.closest(".composer-panel__mention-wrap")) {
+            actions.closeMentionMenu();
+        }
     });
 
     root.addEventListener("click", (event) => {
@@ -16,6 +19,15 @@ export const attachComposerPanelEvents = ({ root, actions }) => {
 
         if (disclosureOption) {
             actions.selectAiDisclosure(disclosureOption.dataset.aiDisclosureValue);
+            return;
+        }
+
+        const mentionOption = event.target.closest("[data-mention-member-name]");
+        if (mentionOption) {
+            actions.selectMentionTarget({
+                name: mentionOption.dataset.mentionMemberName,
+                avatar: mentionOption.dataset.mentionMemberAvatar || ""
+            });
             return;
         }
 
@@ -38,6 +50,14 @@ export const attachComposerPanelEvents = ({ root, actions }) => {
         }
         if (action === "toggle-anonymous") {
             actions.toggleAnonymousMode();
+            return;
+        }
+        if (action === "toggle-mention") {
+            actions.toggleMentionMenu();
+            return;
+        }
+        if (action === "clear-mention") {
+            actions.clearMentionTarget();
             return;
         }
         if (action === "rotate-alias") {

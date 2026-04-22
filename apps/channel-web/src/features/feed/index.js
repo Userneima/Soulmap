@@ -47,6 +47,21 @@ const sortFeedItems = (items, filter) => {
     return [...items];
 };
 
+const findFeedPostById = (state, postId) => state.feedState.items.find((item) => item.id === postId) || null;
+
+const findDrawerCommentById = (state, commentId) => state.overlayState.comments.post?.comments?.find((comment) => comment.id === commentId) || null;
+
+const normalizeLightboxImage = (image) => {
+    if (!image?.url) {
+        return null;
+    }
+
+    return {
+        url: String(image.url),
+        name: String(image.name || "帖子图片")
+    };
+};
+
 export const createFeedActions = ({ store, dataService, showToast }) => ({
     async loadFeed(board = store.getState().feedState.activeBoard) {
         store.dispatch({
@@ -56,7 +71,15 @@ export const createFeedActions = ({ store, dataService, showToast }) => ({
         store.dispatch({ type: "feed/load-start" });
 
         try {
-            const nextBoard = board === "all" ? null : board;
+            const nextBoard = board === "all"
+                ? null
+                : board === "claim"
+                    ? "wish"
+                    : board === "guess"
+                        ? "delivery"
+                    : board === "reveal"
+                        ? "guess"
+                    : board;
             const items = await dataService.listPosts(nextBoard);
             const filter = store.getState().feedState.activeFilter;
             store.dispatch({
@@ -75,6 +98,15 @@ export const createFeedActions = ({ store, dataService, showToast }) => ({
         }
     },
     async setActiveBoard(board) {
+        if (board && board !== "all") {
+            store.dispatch({
+                type: "round/set-stage",
+                payload: {
+                    stage: board,
+                    forceAnonymous: ["wish", "delivery"].includes(board)
+                }
+            });
+        }
         await this.loadFeed(board);
     },
     setFeedFilter(filter) {
@@ -97,6 +129,15 @@ export const createFeedActions = ({ store, dataService, showToast }) => ({
     },
     async likePost(postId) {
         if (!requestInteractionAccess({ store, showToast })) {
+            return;
+        }
+
+        const post = findFeedPostById(store.getState(), postId);
+        if (post?.isDeleted) {
+            showToast({
+                tone: "info",
+                message: "该帖子已删除，无法继续点赞。"
+            });
             return;
         }
 
@@ -126,12 +167,97 @@ export const createFeedActions = ({ store, dataService, showToast }) => ({
             });
         }
     },
+    async claimWish(postId) {
+        if (!requestInteractionAccess({ store, showToast })) {
+            return;
+        }
+
+        const state = store.getState();
+        const post = findFeedPostById(state, postId);
+        if (!post || post.isDeleted) {
+            showToast({
+                tone: "info",
+                message: "这条愿望当前不可选。"
+            });
+            return;
+        }
+
+        if (state.roundState.activeStage !== "claim") {
+            showToast({
+                tone: "info",
+                message: "当前不在选愿望阶段。"
+            });
+            return;
+        }
+
+        if (post.authorUserId && post.authorUserId === state.authState.user?.id) {
+            showToast({
+                tone: "info",
+                message: "不能选择自己发的愿望。"
+            });
+            return;
+        }
+
+        try {
+            const selection = await dataService.saveClaimSelection(post);
+            store.dispatch({
+                type: "round/set-claim-selection",
+                payload: { selection }
+            });
+            showToast({
+                tone: "success",
+                message: state.roundState.claimSelection?.postId === postId
+                    ? "这条愿望已经是你当前的目标。"
+                    : "愿望已锁定，交付阶段会自动带上目标。"
+            });
+        } catch (error) {
+            showToast({
+                tone: "error",
+                message: getChannelActionErrorMessage("update_round_state", error)
+            });
+        }
+    },
     openComments(postId, source = "comments") {
         store.dispatch({
             type: "comments/open",
             payload: { postId, source }
         });
         void this.refreshComments();
+    },
+    openPostImage(postId, imageIndex = 0) {
+        const post = findFeedPostById(store.getState(), postId);
+        const image = normalizeLightboxImage(post?.images?.[imageIndex]);
+        if (!image) {
+            return;
+        }
+
+        store.dispatch({
+            type: "image-lightbox/open",
+            payload: {
+                image,
+                source: "feed"
+            }
+        });
+    },
+    openCurrentDrawerImage(imageIndex = 0) {
+        const image = normalizeLightboxImage(store.getState().overlayState.comments.post?.images?.[imageIndex]);
+        if (!image) {
+            return;
+        }
+
+        store.dispatch({
+            type: "image-lightbox/open",
+            payload: {
+                image,
+                source: "comments"
+            }
+        });
+    },
+    closeImageLightbox() {
+        store.dispatch({ type: "image-lightbox/close" });
+    },
+    getActiveCommentsPostId() {
+        return store.getState().overlayState.comments.postId;
     },
     closeComments() {
         store.dispatch({ type: "comments/close" });
@@ -177,6 +303,15 @@ export const createFeedActions = ({ store, dataService, showToast }) => ({
         }
 
         const { likedCommentIds = [], postId } = store.getState().overlayState.comments;
+        const comment = findDrawerCommentById(store.getState(), commentId);
+        if (comment?.isDeleted) {
+            showToast({
+                tone: "info",
+                message: "该评论已删除，无法继续点赞。"
+            });
+            return;
+        }
+
         if (likedCommentIds.includes(commentId)) {
             showToast({
                 tone: "info",
@@ -200,6 +335,14 @@ export const createFeedActions = ({ store, dataService, showToast }) => ({
     },
     replyToComment(comment) {
         if (!requestInteractionAccess({ store, showToast })) {
+            return;
+        }
+
+        if (comment.isDeleted) {
+            showToast({
+                tone: "info",
+                message: "该评论已删除，无法继续回复。"
+            });
             return;
         }
 
@@ -250,6 +393,14 @@ export const createFeedActions = ({ store, dataService, showToast }) => ({
             return;
         }
 
+        if (state.overlayState.comments.post?.isDeleted) {
+            showToast({
+                tone: "info",
+                message: "原帖已删除，无法继续评论。"
+            });
+            return;
+        }
+
         store.dispatch({ type: "comments/submit-start" });
 
         try {
@@ -289,6 +440,121 @@ export const createFeedActions = ({ store, dataService, showToast }) => ({
             showToast({
                 tone: "error",
                 message: getChannelActionErrorMessage("publish_comment", error)
+            });
+        }
+    },
+    requestDeletePost(postId) {
+        const state = store.getState();
+        const overlayPost = state.overlayState.comments.post;
+        const post = findFeedPostById(state, postId)
+            || ((overlayPost?.id === postId || !postId) ? overlayPost : null);
+        if (!post || post.isDeleted) {
+            return;
+        }
+
+        const currentUserId = state.authState.user?.id || null;
+        const isModerator = ["owner", "admin"].includes(state.runtimeState.realIdentity.role) && state.membershipState.status === "approved";
+        const scopeLabel = post.authorUserId === currentUserId ? "self" : (isModerator ? "moderator" : "unknown");
+        const message = scopeLabel === "moderator"
+            ? "将以管理员身份删除该内容，删除后会保留“已删除”占位。"
+            : "删除后会保留“已删除”占位。";
+
+        store.dispatch({
+            type: "delete-confirm/open",
+            payload: {
+                targetType: "post",
+                targetId: post.id,
+                postId: post.id,
+                title: "删除帖子",
+                message,
+                scopeLabel
+            }
+        });
+    },
+    requestDeleteComment(commentId) {
+        const state = store.getState();
+        const comment = findDrawerCommentById(state, commentId);
+        if (!comment || comment.isDeleted) {
+            return;
+        }
+
+        const currentUserId = state.authState.user?.id || null;
+        const isModerator = ["owner", "admin"].includes(state.runtimeState.realIdentity.role) && state.membershipState.status === "approved";
+        const scopeLabel = comment.authorUserId === currentUserId ? "self" : (isModerator ? "moderator" : "unknown");
+        const message = scopeLabel === "moderator"
+            ? "将以管理员身份删除该内容，删除后会保留“已删除”占位。"
+            : "删除后会保留“已删除”占位。";
+
+        store.dispatch({
+            type: "delete-confirm/open",
+            payload: {
+                targetType: "comment",
+                targetId: comment.id,
+                postId: state.overlayState.comments.postId || state.overlayState.comments.post?.id || null,
+                title: "删除评论",
+                message,
+                scopeLabel
+            }
+        });
+    },
+    cancelDeleteConfirm() {
+        store.dispatch({ type: "delete-confirm/close" });
+    },
+    async confirmDeletePost(postId = store.getState().overlayState.deleteConfirm.targetId) {
+        if (!postId) {
+            return;
+        }
+
+        store.dispatch({ type: "delete-confirm/submit-start" });
+
+        try {
+            const nextPost = await dataService.deletePost(postId);
+            store.dispatch({
+                type: "feed/replace-post",
+                payload: { post: nextPost }
+            });
+            store.dispatch({ type: "delete-confirm/submit-finish" });
+            showToast({
+                tone: "success",
+                message: "帖子已删除。"
+            });
+        } catch (error) {
+            store.dispatch({
+                type: "delete-confirm/submit-error",
+                payload: { error }
+            });
+            showToast({
+                tone: "error",
+                message: getChannelActionErrorMessage("delete_post", error)
+            });
+        }
+    },
+    async confirmDeleteComment(commentId = store.getState().overlayState.deleteConfirm.targetId) {
+        if (!commentId) {
+            return;
+        }
+
+        store.dispatch({ type: "delete-confirm/submit-start" });
+
+        try {
+            const nextPost = await dataService.deleteComment(commentId);
+            store.dispatch({
+                type: "feed/replace-post",
+                payload: { post: nextPost }
+            });
+            store.dispatch({ type: "delete-confirm/submit-finish" });
+            showToast({
+                tone: "success",
+                message: "评论已删除。"
+            });
+        } catch (error) {
+            store.dispatch({
+                type: "delete-confirm/submit-error",
+                payload: { error }
+            });
+            showToast({
+                tone: "error",
+                message: getChannelActionErrorMessage("delete_comment", error)
             });
         }
     },

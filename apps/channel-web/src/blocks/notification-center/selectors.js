@@ -54,6 +54,7 @@ const DESKTOP_BREAKPOINT = 720;
 const NOTIFICATION_PANEL_WIDTH = 302;
 const NOTIFICATION_PANEL_HEIGHT = 396;
 const VIEWPORT_MARGIN = 12;
+const TRIGGER_GAP = 14;
 
 const getNotificationPanelStyle = (overlayState) => {
     if (typeof window === "undefined" || window.innerWidth <= DESKTOP_BREAKPOINT) {
@@ -70,7 +71,7 @@ const getNotificationPanelStyle = (overlayState) => {
     const maxLeft = Math.max(VIEWPORT_MARGIN, viewportWidth - NOTIFICATION_PANEL_WIDTH - VIEWPORT_MARGIN);
     const maxTop = Math.max(VIEWPORT_MARGIN, viewportHeight - NOTIFICATION_PANEL_HEIGHT - VIEWPORT_MARGIN);
     const left = Math.min(maxLeft, Math.max(VIEWPORT_MARGIN, anchorX - NOTIFICATION_PANEL_WIDTH));
-    const top = Math.min(maxTop, Math.max(VIEWPORT_MARGIN, anchorY));
+    const top = Math.min(maxTop, Math.max(VIEWPORT_MARGIN, anchorY + TRIGGER_GAP));
 
     return `top:${top}px;left:${left}px;right:auto;`;
 };

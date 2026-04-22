@@ -41,10 +41,10 @@ export const channelMenuDialogTemplate = (vm) => `
                         </span>
                     </button>
                 ` : ""}
-                ${buildMenuRow({
+                ${vm.canManageChannel ? buildMenuRow({
         action: "channel-management",
-        label: "频道管理"
-    })}
+        label: "编辑频道资料"
+    }) : ""}
                 ${buildMenuRow({
         action: "notification-settings",
         label: "消息通知"

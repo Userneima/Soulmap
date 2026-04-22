@@ -3,7 +3,10 @@ node_modules/
 apps/channel-web/dist/
 dist/
 supabase/.temp/
+.env
 .env.local
 .env.*.local
 supabase/functions/.env
 .vercel/
+playwright-report/
+test-results/

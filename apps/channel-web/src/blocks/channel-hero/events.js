@@ -21,6 +21,11 @@ export const attachChannelHeroEvents = ({ root, actions }) => {
             return;
         }
 
+        if (action === "members") {
+            actions.openOverlay("member-list");
+            return;
+        }
+
         if (action === "notifications") {
             actions.openOverlay("notification-center", {
                 tab: "interaction",

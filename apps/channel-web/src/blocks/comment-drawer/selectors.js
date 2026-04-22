@@ -1,4 +1,5 @@
 import { postCommentsSortChoices } from "../../entities/post/config.js";
+import { buildCommentThreadSummary } from "../../shared/lib/channel-intelligence.js";
 
 const buildThreadedComments = (comments, sort) => {
     const enrichedComments = comments.map((comment, index) => ({
@@ -77,12 +78,15 @@ export const selectCommentDrawerVM = (state) => {
     const post = overlay.post;
     const authStatus = state.authState.status;
     const membershipStatus = state.membershipState.status;
-    const canInteract = authStatus === "authenticated" && membershipStatus === "approved";
+    const currentUserId = state.authState.user?.id || null;
     const canManageAnonymous = ["owner", "admin"].includes(state.runtimeState.realIdentity.role);
     const showAdminReveal = canManageAnonymous && state.uiState.adminRevealAnonymous;
+    const canModerateContent = membershipStatus === "approved" && canManageAnonymous;
+    const canInteract = authStatus === "authenticated" && membershipStatus === "approved" && !post?.isDeleted;
     const activeAlias = state.runtimeState.anonymousProfiles.find((profile) => profile.key === state.runtimeState.activeAliasKey)
         || state.runtimeState.anonymousProfiles[0]
         || null;
+    const postSummaryLines = [];
 
     return {
         open: overlay.open,
@@ -95,10 +99,16 @@ export const selectCommentDrawerVM = (state) => {
         sort: overlay.sort,
         sortChoices: postCommentsSortChoices,
         post,
+        postSummaryLines,
+        postSummarySource: "",
+        threadSummary: post ? buildCommentThreadSummary(post) : null,
         comments: buildThreadedComments(post?.comments || [], overlay.sort).map((comment) => ({
             ...comment,
             isLiked: overlay.likedCommentIds.includes(comment.id),
-            showAdminReveal: Boolean(showAdminReveal && comment.isAnonymous && comment.adminRevealIdentity)
+            showAdminReveal: Boolean(showAdminReveal && comment.isAnonymous && comment.adminRevealIdentity),
+            canDelete: !comment.isDeleted && membershipStatus === "approved" && Boolean(currentUserId) && (
+                comment.authorUserId === currentUserId || canModerateContent
+            )
         })),
         replyTarget: overlay.replyTarget,
         draftText: overlay.draftText,
@@ -107,12 +117,17 @@ export const selectCommentDrawerVM = (state) => {
         adminRevealAnonymous: showAdminReveal,
         submitStatus: overlay.submitStatus,
         canSend: Boolean(overlay.draftText.trim()) && overlay.submitStatus !== "submitting" && overlay.status === "ready" && canInteract,
-        copyEnabled: Boolean(post),
+        copyEnabled: Boolean(post) && !post?.isDeleted,
         canInteract,
+        canDeletePost: !post?.isDeleted && membershipStatus === "approved" && Boolean(currentUserId) && (
+            post?.authorUserId === currentUserId || canModerateContent
+        ),
         accessHint: authStatus === "guest"
             ? "登录后才能评论"
             : authStatus === "upgrading_legacy_anonymous"
                 ? "升级为正式账号后才能评论"
+                : post?.isDeleted
+                    ? "原帖已删除，无法继续评论"
                 : membershipStatus === "approved"
                     ? overlay.anonymousMode
                         ? "匿名回复会自动去除明显个人措辞"

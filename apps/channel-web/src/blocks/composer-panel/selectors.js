@@ -1,5 +1,5 @@
-import { channelBoardChoices } from "../../entities/channel/config.js";
-import { composerIdentityPresets } from "../../entities/identity/config.js";
+import { channelBoardChoices, gameBoardStages } from "../../entities/channel/config.js";
+import { composerIdentityPresets, mentionMembers } from "../../entities/identity/config.js";
 import { composerCapabilityRegistry } from "../../features/composer/registry.js";
 
 const aiDisclosureChoices = [
@@ -13,13 +13,37 @@ const aiDisclosureChoices = [
     }
 ];
 
+const stageByValue = new Map(gameBoardStages.map((stage) => [stage.value, stage]));
+
 export const selectComposerPanelVM = (state) => {
+    const stage = stageByValue.get(state.roundState.activeStage) || gameBoardStages[0];
     const activeAlias = state.runtimeState.anonymousProfiles.find((profile) => profile.key === state.runtimeState.activeAliasKey)
         || state.runtimeState.anonymousProfiles[0];
-    const anonymousMode = state.composerState.anonymousMode;
+    const claimSelection = state.roundState.claimSelection;
+    const guessSelection = state.roundState.guessSelection;
+    const effectiveMentionTarget = stage.requiresMention
+        ? (
+            state.composerState.mentionTarget
+            || (stage.value === "delivery" && claimSelection
+                ? {
+                    name: claimSelection.authorName,
+                    avatar: claimSelection.authorAvatar || ""
+                }
+                : null)
+            || (stage.value === "guess" && guessSelection
+                ? {
+                    name: guessSelection.name,
+                    avatar: guessSelection.avatar || ""
+                }
+                : null)
+        )
+        : null;
+    const anonymousMode = stage.forceAnonymous ? true : state.composerState.anonymousMode;
     const expanded = state.composerState.expanded;
     const draftText = state.composerState.draftText;
     const images = state.composerState.images;
+    const audioDraft = state.composerState.audioDraft;
+    const audioRecording = state.composerState.audioRecording;
     const authStatus = state.authState.status;
     const membershipStatus = state.membershipState.status;
     const canCompose = membershipStatus === "approved" && authStatus === "authenticated";
@@ -53,28 +77,56 @@ export const selectComposerPanelVM = (state) => {
                     primaryLabel: membershipStatus === "rejected" ? "重新申请" : "提交加入申请",
                     primaryAction: "submit-join-request"
                 };
+    const availableMentionMembers = stage.value === "guess"
+        ? mentionMembers.filter((member) => member.name !== state.runtimeState.realIdentity.name)
+        : mentionMembers;
+    const revealEntry = state.roundState.revealMap?.[state.runtimeState.realIdentity.name] || null;
+    const revealResult = revealEntry?.angel
+        ? {
+            guessedName: guessSelection?.name || "",
+            guessedAvatar: guessSelection?.avatar || "",
+            actualName: revealEntry.angel.name,
+            actualAvatar: revealEntry.angel.avatar || "",
+            isCorrect: Boolean(guessSelection?.name) && guessSelection.name === revealEntry.angel.name
+        }
+        : null;
 
     return {
         capabilities: composerCapabilityRegistry,
         canCompose,
+        stageAllowsPosting: stage.canCompose,
+        hideInlineComposer: stage.value === "guess",
+        stageInfo: stage,
         expanded,
         gate: canCompose ? null : gateByState,
         draftText,
         images,
+        audioDraft,
+        audioRecording,
+        mentionTarget: effectiveMentionTarget,
+        mentionOpen: stage.requiresMention ? state.composerState.mentionOpen : false,
+        mentionMembers: availableMentionMembers,
+        mentionTitle: stage.value === "guess" ? "你猜的是谁" : "实现谁的愿望",
         charCount: draftText.length,
         aiDisclosure: state.composerState.aiDisclosure,
         aiDisclosureChoices,
         boardChoices: channelBoardChoices,
-        selectedBoard: state.composerState.board,
+        selectedBoard: stage.value,
         anonymousMode,
+        anonymousLocked: stage.forceAnonymous,
         autoRotate: state.composerState.autoRotate,
         aiImageReshape: state.composerState.aiImageReshape,
-        aiDisclosureOpen: state.composerState.aiDisclosureOpen,
+        aiDisclosureOpen: stage.forceAnonymous ? false : state.composerState.aiDisclosureOpen,
         submitStatus: state.composerState.submitStatus,
         submitLabel: state.composerState.submitStatus === "submitting"
-            ? "发表中"
-            : anonymousMode ? "匿名发表" : "发表",
-        canSubmit: Boolean(draftText.trim() || images.length) && state.composerState.submitStatus !== "submitting",
+            ? "提交中"
+            : stage.submitLabel,
+        canSubmit: stage.canCompose
+            && Boolean(draftText.trim() || images.length || audioDraft)
+            && (stage.value !== "delivery" || Boolean(claimSelection?.postId))
+            && (!stage.requiresMention || Boolean(effectiveMentionTarget))
+            && !audioRecording
+            && state.composerState.submitStatus !== "submitting",
         identityDisplay: anonymousMode
             ? {
                 avatar: activeAlias?.avatar || "",
@@ -86,15 +138,24 @@ export const selectComposerPanelVM = (state) => {
                 name: state.runtimeState.realIdentity.name,
                 meta: state.runtimeState.realIdentity.meta
             },
-        placeholder: anonymousMode ? composerIdentityPresets.anonymousPlaceholder : composerIdentityPresets.defaultPlaceholder,
+        placeholder: stage.placeholder || (anonymousMode ? composerIdentityPresets.anonymousPlaceholder : composerIdentityPresets.defaultPlaceholder),
         collapsedSummary: draftText.trim()
             ? draftText.trim().slice(0, 72)
             : images.length
                 ? `已添加 ${images.length} 张图片`
-                : anonymousMode
+                : audioDraft
+                    ? "已录 1 条语音"
+                : stage.taskLabel || (anonymousMode
                     ? "以匿名身份发布想法"
-                    : "分享频道里的新动态",
-        hasDraft: Boolean(draftText.trim() || images.length),
-        activeAlias
+                    : "分享频道里的新动态"),
+        hasDraft: Boolean(draftText.trim() || images.length || audioDraft),
+        activeAlias,
+        claimSelection,
+        guessSelection,
+        revealResult,
+        isClaimStage: stage.value === "claim",
+        isDeliveryStage: stage.value === "delivery",
+        isGuessStage: stage.value === "guess",
+        isRevealStage: stage.value === "reveal"
     };
 };

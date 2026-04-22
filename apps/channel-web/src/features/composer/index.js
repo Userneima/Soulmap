@@ -1,11 +1,13 @@
 import {
     anonymizeComposerText,
+    cloneComposerAudioForPost,
     cloneComposerImageForPost,
     createImageDraftFromFile,
     generateAnonymousPersona,
     getChannelActionErrorMessage,
     processAnonymousImageForPost,
     readBlobAsDataUrl,
+    revokeComposerAudioDraft,
     revokeImageDrafts
 } from "../../shared/lib/helpers.js";
 
@@ -43,6 +45,81 @@ export const createComposerActions = ({ store, dataService, showToast, feedActio
         store.dispatch({
             type: "composer/set-field",
             payload: partial
+        });
+    },
+    toggleMentionMenu() {
+        const { mentionOpen } = store.getState().composerState;
+        store.dispatch({
+            type: "composer/set-field",
+            payload: {
+                mentionOpen: !mentionOpen
+            }
+        });
+    },
+    closeMentionMenu() {
+        if (!store.getState().composerState.mentionOpen) {
+            return;
+        }
+        store.dispatch({
+            type: "composer/set-field",
+            payload: {
+                mentionOpen: false
+            }
+        });
+    },
+    selectMentionTarget(member) {
+        const state = store.getState();
+        if (state.roundState.activeStage === "guess" && member?.name && state.roundState.guessExcludedNames?.includes(member.name)) {
+            store.dispatch({
+                type: "round/toggle-guess-exclusion",
+                payload: { name: member.name }
+            });
+        }
+        store.dispatch({
+            type: "composer/set-field",
+            payload: {
+                mentionTarget: member ? {
+                    name: member.name,
+                    avatar: member.avatar || ""
+                } : null,
+                mentionOpen: false
+            }
+        });
+    },
+    setGuessDraftText(value) {
+        if (store.getState().roundState.activeStage !== "guess") {
+            return;
+        }
+        store.dispatch({
+            type: "composer/set-field",
+            payload: {
+                draftText: String(value || "")
+            }
+        });
+    },
+    toggleGuessExcludedMember(name) {
+        const normalizedName = String(name || "").trim();
+        if (!normalizedName || store.getState().roundState.activeStage !== "guess") {
+            return;
+        }
+        store.dispatch({
+            type: "round/toggle-guess-exclusion",
+            payload: { name: normalizedName }
+        });
+    },
+    async submitGuessStage() {
+        if (store.getState().roundState.activeStage !== "guess") {
+            return;
+        }
+        await this.submitPost();
+    },
+    clearMentionTarget() {
+        store.dispatch({
+            type: "composer/set-field",
+            payload: {
+                mentionTarget: null,
+                mentionOpen: false
+            }
         });
     },
     toggleAiDisclosureMenu() {
@@ -225,16 +302,58 @@ export const createComposerActions = ({ store, dataService, showToast, feedActio
         }
 
         const state = store.getState();
+        const activeStage = state.roundState.activeStage;
         const rawText = state.composerState.draftText.trim();
         const images = state.composerState.images;
-        if (!rawText && !images.length) {
+        const audioDraft = state.composerState.audioDraft;
+        if (activeStage !== "guess" && !rawText && !images.length && !audioDraft) {
             return;
         }
 
         store.dispatch({ type: "composer/submit-start" });
 
         try {
-            const anonymousMode = state.composerState.anonymousMode;
+            const anonymousMode = ["wish", "delivery"].includes(activeStage) ? true : state.composerState.anonymousMode;
+            const claimSelection = state.roundState.claimSelection;
+            const mentionTarget = state.composerState.mentionTarget || (claimSelection
+                ? {
+                    name: claimSelection.authorName,
+                    avatar: claimSelection.authorAvatar || ""
+                }
+                : null);
+            if (activeStage === "delivery" && !claimSelection?.postId) {
+                store.dispatch({
+                    type: "composer/submit-error",
+                    payload: { error: new Error("请先在选愿望阶段锁定目标。") }
+                });
+                showToast({
+                    tone: "info",
+                    message: "先在选愿望阶段锁定 1 条愿望，再回来交付。"
+                });
+                return;
+            }
+            if (activeStage === "delivery" && !mentionTarget) {
+                store.dispatch({
+                    type: "composer/submit-error",
+                    payload: { error: new Error("当前交付目标还没有同步完成。") }
+                });
+                showToast({
+                    tone: "info",
+                    message: "当前交付目标还没同步出来，刷新后再试。"
+                });
+                return;
+            }
+            if (activeStage === "guess" && !mentionTarget) {
+                store.dispatch({
+                    type: "composer/submit-error",
+                    payload: { error: new Error("请先选择你猜的是谁。") }
+                });
+                showToast({
+                    tone: "info",
+                    message: "先选你猜的是谁，再提交判断依据。"
+                });
+                return;
+            }
             const shouldAiReshapeImages = anonymousMode && state.composerState.aiImageReshape && images.length > 0;
             const sourceImages = shouldAiReshapeImages
                 ? await Promise.all(images.map((image) => cloneComposerImageForPost(image)))
@@ -252,6 +371,9 @@ export const createComposerActions = ({ store, dataService, showToast, feedActio
             const publishedText = anonymousMode
                 ? (anonymizedDraft?.text || anonymizeComposerText(rawText))
                 : rawText;
+            const publishedBody = mentionTarget
+                ? `@${mentionTarget.name}\n${publishedText || ""}`.trim()
+                : (publishedText || "");
             const publishedImages = anonymousMode
                 ? (
                     shouldAiReshapeImages && anonymizedDraft?.images?.length === images.length
@@ -259,28 +381,62 @@ export const createComposerActions = ({ store, dataService, showToast, feedActio
                         : await Promise.all(images.map((image) => processAnonymousImageForPost(image)))
                 )
                 : await Promise.all(images.map((image) => cloneComposerImageForPost(image)));
+            const publishedAudio = audioDraft
+                ? await cloneComposerAudioForPost(audioDraft)
+                : null;
             const activeAliasKey = state.runtimeState.activeAliasKey;
             const post = await dataService.publishPost({
-                body: publishedText || "分享一张图片",
-                images: publishedImages,
-                boardSlug: state.composerState.board === "none" ? null : state.composerState.board,
+                body: publishedBody || (publishedAudio ? "分享一段语音" : "分享一张图片"),
+                media: [
+                    ...publishedImages,
+                    ...(publishedAudio ? [publishedAudio] : [])
+                ],
+                boardSlug: activeStage,
                 aiDisclosure: anonymousMode ? "none" : state.composerState.aiDisclosure,
                 author: anonymousMode
                     ? { type: "alias_session", key: activeAliasKey }
                     : { type: "identity" }
             });
+            const savedGuessSelection = activeStage === "guess" && mentionTarget
+                ? await dataService.saveGuessSelection(mentionTarget)
+                : null;
 
             revokeImageDrafts(images);
+            if (audioDraft) {
+                revokeComposerAudioDraft(audioDraft);
+            }
             store.dispatch({ type: "composer/reset" });
+            store.dispatch({
+                type: "round/mark-progress",
+                payload: {
+                    wishSubmitted: activeStage === "wish" ? true : state.roundState.progress.wishSubmitted,
+                    deliverySubmitted: activeStage === "delivery" ? true : state.roundState.progress.deliverySubmitted,
+                    guessSubmitted: activeStage === "guess" ? true : state.roundState.progress.guessSubmitted
+                }
+            });
+            if (savedGuessSelection) {
+                store.dispatch({
+                    type: "round/set-guess-selection",
+                    payload: { selection: savedGuessSelection }
+                });
+            }
             if (anonymousMode && state.composerState.autoRotate) {
                 await this.regenerateAliasProfile();
             }
 
-            const targetBoard = post.board === "none" ? "all" : post.board;
-            await feedActions.loadFeed(targetBoard);
+            if (activeStage === "delivery") {
+                await feedActions.setActiveBoard("guess");
+            } else {
+                const targetBoard = post.board === "none" ? "all" : post.board;
+                await feedActions.loadFeed(targetBoard);
+            }
             showToast({
                 tone: "success",
-                message: anonymousMode ? "匿名帖子已发送。" : "帖子已发送。"
+                message: activeStage === "delivery"
+                    ? "交付已提交，已切到猜测阶段。"
+                    : anonymousMode
+                        ? "匿名帖子已发送。"
+                        : "帖子已发送。"
             });
         } catch (error) {
             store.dispatch({

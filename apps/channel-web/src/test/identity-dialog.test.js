@@ -23,7 +23,8 @@ const createMockDataService = () => ({
     getPost: vi.fn(),
     publishPost: vi.fn(),
     publishComment: vi.fn(),
-    updateIdentity: vi.fn()
+    updateIdentity: vi.fn(),
+    updateChannel: vi.fn()
 });
 
 describe("identity dialog input stability", () => {

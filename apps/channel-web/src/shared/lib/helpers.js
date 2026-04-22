@@ -154,20 +154,50 @@ export const cloneComposerImageForPost = async (image) => {
 
 export const processAnonymousImageForPost = async (image) => {
     const sourceImage = await loadComposerImage(image.url);
-    const cropX = Math.round(sourceImage.naturalWidth * 0.02);
-    const cropY = Math.round(sourceImage.naturalHeight * 0.02);
+    const cropX = Math.round(sourceImage.naturalWidth * 0.04);
+    const cropY = Math.round(sourceImage.naturalHeight * 0.04);
     const sourceWidth = Math.max(1, sourceImage.naturalWidth - cropX * 2);
     const sourceHeight = Math.max(1, sourceImage.naturalHeight - cropY * 2);
-    const scale = Math.min(1, 1280 / Math.max(sourceWidth, sourceHeight));
+    const scale = Math.min(1, 1120 / Math.max(sourceWidth, sourceHeight));
     const canvas = document.createElement("canvas");
     canvas.width = Math.max(1, Math.round(sourceWidth * scale));
     canvas.height = Math.max(1, Math.round(sourceHeight * scale));
     const context = canvas.getContext("2d");
-    context.filter = "blur(0.85px) saturate(0.92) contrast(1.01) brightness(1.01)";
-    context.drawImage(sourceImage, cropX, cropY, sourceWidth, sourceHeight, 0, 0, canvas.width, canvas.height);
-    context.fillStyle = "rgba(18, 18, 18, 0.08)";
-    context.fillRect(0, 0, canvas.width, 10);
-    context.fillRect(0, canvas.height - 10, canvas.width, 10);
+    if (!context) {
+        throw new Error("Canvas context is not available.");
+    }
+
+    const rotation = ((toSeedNumber(`${image.id}-${image.name}`) % 5) - 2) * 0.0045;
+    context.save();
+    context.translate(canvas.width / 2, canvas.height / 2);
+    context.rotate(rotation);
+    context.filter = "blur(1.8px) saturate(0.84) contrast(0.94) brightness(1.04)";
+    context.drawImage(
+        sourceImage,
+        cropX,
+        cropY,
+        sourceWidth,
+        sourceHeight,
+        -canvas.width / 2,
+        -canvas.height / 2,
+        canvas.width,
+        canvas.height
+    );
+    context.restore();
+
+    const vignette = context.createLinearGradient(0, 0, canvas.width, canvas.height);
+    vignette.addColorStop(0, "rgba(20, 20, 20, 0.12)");
+    vignette.addColorStop(0.5, "rgba(255, 255, 255, 0.03)");
+    vignette.addColorStop(1, "rgba(20, 20, 20, 0.14)");
+    context.fillStyle = vignette;
+    context.fillRect(0, 0, canvas.width, canvas.height);
+
+    context.fillStyle = "rgba(16, 16, 16, 0.1)";
+    context.fillRect(0, 0, canvas.width, 14);
+    context.fillRect(0, canvas.height - 14, canvas.width, 14);
+    context.fillRect(0, 0, 10, canvas.height);
+    context.fillRect(canvas.width - 10, 0, 10, canvas.height);
+
     const blob = await new Promise((resolve) => {
         canvas.toBlob(resolve, "image/jpeg", 0.92);
     });
@@ -180,16 +210,43 @@ export const processAnonymousImageForPost = async (image) => {
 
 export const createImageDraftFromFile = (file, nextId) => ({
     id: nextId,
+    kind: "image",
     name: file.name,
     url: URL.createObjectURL(file)
 });
 
+export const createAudioDraftFromBlob = (blob, nextId) => ({
+    id: nextId,
+    kind: "audio",
+    name: `语音 ${nextId}`,
+    url: URL.createObjectURL(blob),
+    mimeType: blob.type || "audio/webm"
+});
+
+export const cloneComposerAudioForPost = async (audio) => {
+    const response = await fetch(audio.url);
+    const blob = await response.blob();
+    return {
+        id: audio.id,
+        kind: "audio",
+        name: audio.name,
+        mimeType: audio.mimeType || blob.type || "audio/webm",
+        url: await readBlobAsDataUrl(blob)
+    };
+};
+
 export const revokeImageDrafts = (images) => {
     images.forEach((image) => {
-        if (image?.url?.startsWith("blob:")) {
+        if (image?.url?.startsWith("blob:") && typeof URL.revokeObjectURL === "function") {
             URL.revokeObjectURL(image.url);
         }
     });
+};
+
+export const revokeComposerAudioDraft = (audio) => {
+    if (audio?.url?.startsWith("blob:") && typeof URL.revokeObjectURL === "function") {
+        URL.revokeObjectURL(audio.url);
+    }
 };
 
 export const copyText = async (text) => {
@@ -268,7 +325,11 @@ export const getChannelActionErrorMessage = (action, error) => {
         publish_post: "帖子发送失败，草稿还保留着，可以直接重试。",
         publish_comment: "评论发送失败，请稍后重试。",
         like_comment: "评论点赞失败，请稍后重试。",
+        delete_post: "帖子删除失败，请稍后重试。",
+        delete_comment: "评论删除失败，请稍后重试。",
         update_identity: "昵称或头像保存失败，请稍后重试。",
+        update_channel: "频道资料保存失败，请稍后重试。",
+        update_round_state: "本周主题或上帝保存失败，请稍后重试。",
         load_feed: "频道内容加载失败，请刷新或重试。",
         load_comments: "评论加载失败，请稍后重试。",
         submit_join_request: "加入申请提交失败，请稍后重试。",

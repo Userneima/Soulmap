@@ -3,6 +3,7 @@
     inset: 0;
     z-index: 57;
     pointer-events: none;
+    visibility: hidden;
 }
 
 .notification-center__backdrop {
@@ -30,6 +31,7 @@
 
 .notification-center.is-open {
     pointer-events: auto;
+    visibility: visible;
 }
 
 .notification-center.is-open .notification-center__backdrop {

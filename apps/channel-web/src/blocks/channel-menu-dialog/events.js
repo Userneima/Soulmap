@@ -23,10 +23,8 @@ export const attachChannelMenuDialogEvents = ({ root, actions }) => {
         }
 
         if (action === "channel-management") {
-            actions.showToast({
-                tone: "info",
-                message: "频道管理入口后面再接，这一版先恢复菜单结构。"
-            });
+            actions.closeOverlay("channel-menu");
+            actions.openOverlay("channel-settings");
             return;
         }
 

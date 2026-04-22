@@ -18,18 +18,18 @@ export const channelPageTemplate = () => `
                         <aside class="channel-page__aside">
                             <section class="channel-page__join" data-screen-slot="join-request-panel"></section>
                             <section class="channel-page__review" data-screen-slot="membership-review-panel"></section>
-                            <section class="channel-page__notice">
-                                <h3>公告</h3>
-                                <div class="channel-page__notice-body">暂无公告</div>
-                            </section>
+                            <section class="channel-page__intelligence" data-screen-slot="channel-intelligence"></section>
                         </aside>
                     </div>
                 </div>
             </div>
         </main>
         <div data-screen-slot="comment-drawer"></div>
+        <div data-screen-slot="image-lightbox"></div>
         <div data-screen-slot="notification-center"></div>
+        <div data-screen-slot="member-list-dialog"></div>
         <div data-screen-slot="channel-menu-dialog"></div>
+        <div data-screen-slot="channel-settings-dialog"></div>
         <div data-screen-slot="identity-dialog"></div>
         <div data-screen-slot="auth-gate"></div>
         <div data-screen-slot="system-feedback"></div>

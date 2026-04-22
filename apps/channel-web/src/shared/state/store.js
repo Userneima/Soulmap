@@ -1,4 +1,4 @@
-import { boardTabs, feedFilterChoices } from "../../entities/channel/config.js";
+import { boardTabs, feedFilterChoices, gameRoundTheme } from "../../entities/channel/config.js";
 import { defaultAnonymousProfiles, defaultRealIdentity } from "../../entities/identity/config.js";
 
 const firstBoard = boardTabs[0]?.value || "all";
@@ -41,6 +41,21 @@ export const createInitialState = () => ({
         status: "idle",
         error: null
     },
+    roundState: {
+        theme: gameRoundTheme,
+        activeStage: "wish",
+        claimSelection: null,
+        guessSelection: null,
+        guessExcludedNames: [],
+        revealMap: {},
+        godProfile: null,
+        progress: {
+            wishSubmitted: false,
+            claimSelected: false,
+            deliverySubmitted: false,
+            guessSubmitted: false
+        }
+    },
     feedState: {
         status: "idle",
         items: [],
@@ -55,6 +70,10 @@ export const createInitialState = () => ({
         draftText: "",
         images: [],
         nextImageId: 1,
+        audioDraft: null,
+        nextAudioId: 1,
+        audioRecording: false,
+        mentionTarget: null,
         aiDisclosure: "none",
         board: "none",
         anonymousMode: false,
@@ -94,6 +113,44 @@ export const createInitialState = () => ({
             anchorX: null,
             anchorY: null,
             anchorSource: ""
+        },
+        memberList: {
+            open: false
+        },
+        channelSettings: {
+            open: false,
+            draftName: "",
+            draftLogo: "",
+            draftBackground: "",
+            saveStatus: "idle",
+            error: null
+        },
+        channelIntelligence: {
+            open: false,
+            godPickerOpen: false,
+            themeEditorOpen: false,
+            revealEditorOpen: false,
+            revealMemberPickerOpen: false,
+            revealAngelPickerOpen: false,
+            draftRevealMember: null,
+            draftRevealAngel: null,
+            draftTheme: ""
+        },
+        imageLightbox: {
+            open: false,
+            image: null,
+            source: ""
+        },
+        deleteConfirm: {
+            open: false,
+            targetType: "",
+            targetId: null,
+            postId: null,
+            title: "",
+            message: "",
+            scopeLabel: "",
+            submitStatus: "idle",
+            error: null
         },
         identity: {
             open: false,
@@ -141,18 +198,30 @@ const cloneState = (state) => ({
     channelCreateState: {
         ...state.channelCreateState
     },
+    roundState: {
+        ...state.roundState,
+        claimSelection: cloneSimple(state.roundState.claimSelection),
+        guessSelection: cloneSimple(state.roundState.guessSelection),
+        guessExcludedNames: [...(state.roundState.guessExcludedNames || [])],
+        revealMap: { ...(state.roundState.revealMap || {}) },
+        godProfile: cloneSimple(state.roundState.godProfile),
+        progress: { ...state.roundState.progress }
+    },
     feedState: {
         ...state.feedState,
         likedPostIds: [...state.feedState.likedPostIds],
         items: state.feedState.items.map((post) => ({
             ...post,
             images: [...(post.images || [])],
+            audioClips: [...(post.audioClips || [])],
             comments: (post.comments || []).map((comment) => ({ ...comment }))
         }))
     },
     composerState: {
         ...state.composerState,
-        images: state.composerState.images.map((image) => ({ ...image }))
+        mentionTarget: cloneSimple(state.composerState.mentionTarget),
+        images: state.composerState.images.map((image) => ({ ...image })),
+        audioDraft: cloneSimple(state.composerState.audioDraft)
     },
     overlayState: {
         comments: {
@@ -163,12 +232,21 @@ const cloneState = (state) => ({
                 ? {
                     ...state.overlayState.comments.post,
                     images: [...(state.overlayState.comments.post.images || [])],
+                    audioClips: [...(state.overlayState.comments.post.audioClips || [])],
                     comments: (state.overlayState.comments.post.comments || []).map((comment) => ({ ...comment }))
                 }
                 : null
         },
         channelMenu: { ...state.overlayState.channelMenu },
         notificationCenter: { ...state.overlayState.notificationCenter },
+        memberList: { ...state.overlayState.memberList },
+        channelSettings: { ...state.overlayState.channelSettings },
+        channelIntelligence: { ...state.overlayState.channelIntelligence },
+        imageLightbox: {
+            ...state.overlayState.imageLightbox,
+            image: cloneSimple(state.overlayState.imageLightbox.image)
+        },
+        deleteConfirm: { ...state.overlayState.deleteConfirm },
         identity: { ...state.overlayState.identity },
         authGate: { ...state.overlayState.authGate },
         toast: { ...state.overlayState.toast }
@@ -180,10 +258,37 @@ const resetMemberRuntime = (draft) => {
     draft.runtimeState.realIdentity = { ...defaultRealIdentity };
     draft.runtimeState.anonymousProfiles = defaultAnonymousProfiles.map((profile) => ({ ...profile }));
     draft.runtimeState.activeAliasKey = firstAliasKey;
+    draft.roundState.claimSelection = null;
+    draft.roundState.guessSelection = null;
+    draft.roundState.guessExcludedNames = [];
+    draft.roundState.revealMap = {};
+    draft.roundState.progress.claimSelected = false;
+    draft.roundState.progress.guessSubmitted = false;
     draft.composerState.expanded = false;
     draft.composerState.anonymousMode = false;
     draft.composerState.autoRotate = false;
     draft.composerState.aiImageReshape = false;
+};
+
+const applyRoundStateFromChannel = (draft, channel) => {
+    const nextTheme = String(channel?.currentRoundTheme || channel?.current_round_theme || "").trim();
+    const nextGodName = String(channel?.currentRoundGodProfile?.name || channel?.current_round_god_name || "").trim();
+    const nextGodAvatar = String(channel?.currentRoundGodProfile?.avatar || channel?.current_round_god_avatar || "").trim();
+    const nextRevealMap = channel?.currentRevealMap && typeof channel.currentRevealMap === "object"
+        ? channel.currentRevealMap
+        : channel?.current_reveal_map && typeof channel.current_reveal_map === "object"
+            ? channel.current_reveal_map
+            : {};
+
+    draft.roundState.theme = nextTheme;
+    draft.roundState.godProfile = nextGodName
+        ? {
+            name: nextGodName,
+            avatar: nextGodAvatar
+        }
+        : null;
+    draft.roundState.revealMap = { ...nextRevealMap };
+    draft.overlayState.channelIntelligence.draftTheme = nextTheme;
 };
 
 const applyAction = (draft, action) => {
@@ -198,6 +303,7 @@ const applyAction = (draft, action) => {
         draft.runtimeState.hydrationSource = action.payload.source || "runtime-config";
         draft.runtimeState.blockingError = null;
         draft.runtimeState.channel = cloneSimple(action.payload.channel);
+        applyRoundStateFromChannel(draft, action.payload.channel);
         resetMemberRuntime(draft);
         return;
     case "runtime/hydrate-start":
@@ -210,6 +316,7 @@ const applyAction = (draft, action) => {
         draft.runtimeState.hydrationSource = action.payload.source || draft.runtimeState.hydrationSource;
         draft.runtimeState.blockingError = null;
         draft.runtimeState.channel = cloneSimple(action.payload.channel);
+        applyRoundStateFromChannel(draft, action.payload.channel);
         resetMemberRuntime(draft);
         return;
     case "runtime/member-ready":
@@ -218,11 +325,17 @@ const applyAction = (draft, action) => {
         draft.runtimeState.hydrationSource = action.payload.source || draft.runtimeState.hydrationSource;
         draft.runtimeState.blockingError = null;
         draft.runtimeState.channel = cloneSimple(action.payload.channel);
+        applyRoundStateFromChannel(draft, action.payload.channel);
         draft.runtimeState.realIdentity = { ...action.payload.realIdentity };
         draft.runtimeState.anonymousProfiles = action.payload.anonymousProfiles.map((profile) => ({ ...profile }));
         draft.runtimeState.activeAliasKey = action.payload.activeAliasKey
             || action.payload.anonymousProfiles[0]?.key
             || firstAliasKey;
+        draft.roundState.claimSelection = cloneSimple(action.payload.claimSelection) || null;
+        draft.roundState.guessSelection = cloneSimple(action.payload.guessSelection) || null;
+        draft.roundState.guessExcludedNames = [];
+        draft.roundState.progress.claimSelected = Boolean(action.payload.claimSelection?.postId);
+        draft.roundState.progress.guessSubmitted = Boolean(action.payload.guessSelection?.name);
         draft.overlayState.identity.draftName = action.payload.realIdentity.name;
         draft.overlayState.identity.draftAvatar = action.payload.realIdentity.avatar;
         return;
@@ -243,6 +356,16 @@ const applyAction = (draft, action) => {
         draft.runtimeState.realIdentity = { ...draft.runtimeState.realIdentity, ...action.payload.identity };
         draft.overlayState.identity.draftName = draft.runtimeState.realIdentity.name;
         draft.overlayState.identity.draftAvatar = draft.runtimeState.realIdentity.avatar;
+        return;
+    case "runtime/update-channel":
+        draft.runtimeState.channel = {
+            ...draft.runtimeState.channel,
+            ...action.payload.channel
+        };
+        applyRoundStateFromChannel(draft, draft.runtimeState.channel);
+        draft.overlayState.channelSettings.draftName = draft.runtimeState.channel?.name || "";
+        draft.overlayState.channelSettings.draftLogo = draft.runtimeState.channel?.logoUrl || "";
+        draft.overlayState.channelSettings.draftBackground = draft.runtimeState.channel?.backgroundUrl || "";
         return;
     case "auth/set-state":
         draft.authState = {
@@ -300,6 +423,88 @@ const applyAction = (draft, action) => {
         draft.channelCreateState.status = "idle";
         draft.channelCreateState.error = null;
         return;
+    case "round/set-stage":
+        draft.roundState.activeStage = action.payload.stage;
+        draft.composerState.board = action.payload.stage;
+        draft.composerState.mentionTarget = action.payload.stage === "delivery" && draft.roundState.claimSelection
+            ? {
+                name: draft.roundState.claimSelection.authorName,
+                avatar: draft.roundState.claimSelection.authorAvatar || ""
+            }
+            : action.payload.stage === "guess" && draft.roundState.guessSelection
+                ? {
+                    name: draft.roundState.guessSelection.name,
+                    avatar: draft.roundState.guessSelection.avatar || ""
+                }
+                : null;
+        draft.composerState.mentionOpen = false;
+        if (action.payload.forceAnonymous) {
+            draft.composerState.anonymousMode = true;
+            draft.composerState.aiDisclosure = "none";
+            draft.composerState.aiDisclosureOpen = false;
+            draft.composerState.aiImageReshape = true;
+        }
+        return;
+    case "round/set-claim-selection":
+        draft.roundState.claimSelection = action.payload.selection ? { ...action.payload.selection } : null;
+        draft.roundState.progress.claimSelected = Boolean(action.payload.selection?.postId);
+        if (draft.roundState.activeStage === "delivery") {
+            draft.composerState.mentionTarget = action.payload.selection
+                ? {
+                    name: action.payload.selection.authorName,
+                    avatar: action.payload.selection.authorAvatar || ""
+                }
+                : null;
+        }
+        return;
+    case "round/set-guess-selection":
+        draft.roundState.guessSelection = action.payload.selection ? { ...action.payload.selection } : null;
+        draft.roundState.progress.guessSubmitted = Boolean(action.payload.selection?.name);
+        if (action.payload.selection?.name) {
+            draft.roundState.guessExcludedNames = draft.roundState.guessExcludedNames.filter((name) => name !== action.payload.selection.name);
+        }
+        if (draft.roundState.activeStage === "guess") {
+            draft.composerState.mentionTarget = action.payload.selection
+                ? {
+                    name: action.payload.selection.name,
+                    avatar: action.payload.selection.avatar || ""
+                }
+                : null;
+        }
+        return;
+    case "round/toggle-guess-exclusion": {
+        const name = String(action.payload.name || "").trim();
+        if (!name) {
+            return;
+        }
+        if (draft.roundState.guessExcludedNames.includes(name)) {
+            draft.roundState.guessExcludedNames = draft.roundState.guessExcludedNames.filter((item) => item !== name);
+            return;
+        }
+        draft.roundState.guessExcludedNames = [...draft.roundState.guessExcludedNames, name];
+        if (draft.roundState.guessSelection?.name === name) {
+            draft.roundState.guessSelection = null;
+            draft.roundState.progress.guessSubmitted = false;
+        }
+        if (draft.composerState.mentionTarget?.name === name) {
+            draft.composerState.mentionTarget = null;
+        }
+        return;
+    }
+    case "round/set-theme":
+        draft.roundState.theme = action.payload.theme;
+        draft.overlayState.channelIntelligence.draftTheme = action.payload.theme;
+        return;
+    case "round/set-god":
+        draft.roundState.godProfile = action.payload.godProfile ? { ...action.payload.godProfile } : null;
+        draft.overlayState.channelIntelligence.godPickerOpen = false;
+        return;
+    case "round/mark-progress":
+        draft.roundState.progress = {
+            ...draft.roundState.progress,
+            ...action.payload
+        };
+        return;
     case "feed/set-board":
         draft.feedState.activeBoard = action.payload.board;
         return;
@@ -338,6 +543,18 @@ const applyAction = (draft, action) => {
             };
         }
         return;
+    case "feed/replace-post":
+        draft.feedState.items = draft.feedState.items.map((item) => (
+            item.id === action.payload.post.id
+                ? { ...action.payload.post }
+                : item
+        ));
+        if (draft.overlayState.comments.post?.id === action.payload.post.id) {
+            draft.overlayState.comments.post = {
+                ...action.payload.post
+            };
+        }
+        return;
     case "composer/set-field":
         Object.assign(draft.composerState, action.payload);
         return;
@@ -347,11 +564,26 @@ const applyAction = (draft, action) => {
     case "composer/collapse":
         draft.composerState.expanded = false;
         draft.composerState.aiDisclosureOpen = false;
+        draft.composerState.mentionOpen = false;
         return;
     case "composer/add-images":
         draft.composerState.images.push(...action.payload.images.map((image) => ({ ...image })));
         draft.composerState.nextImageId = action.payload.nextImageId;
         draft.composerState.expanded = true;
+        return;
+    case "composer/set-audio-draft":
+        draft.composerState.audioDraft = action.payload.audio ? { ...action.payload.audio } : null;
+        draft.composerState.nextAudioId = action.payload.nextAudioId ?? draft.composerState.nextAudioId;
+        draft.composerState.expanded = true;
+        return;
+    case "composer/clear-audio-draft":
+        draft.composerState.audioDraft = null;
+        return;
+    case "composer/set-recording":
+        draft.composerState.audioRecording = Boolean(action.payload.recording);
+        if (action.payload.expand) {
+            draft.composerState.expanded = true;
+        }
         return;
     case "composer/remove-image":
         draft.composerState.images = draft.composerState.images.filter((image) => image.id !== action.payload.id);
@@ -360,6 +592,9 @@ const applyAction = (draft, action) => {
         draft.composerState.expanded = false;
         draft.composerState.draftText = "";
         draft.composerState.images = [];
+        draft.composerState.audioDraft = null;
+        draft.composerState.audioRecording = false;
+        draft.composerState.mentionTarget = null;
         draft.composerState.aiDisclosure = "none";
         draft.composerState.board = "none";
         draft.composerState.aiImageReshape = false;
@@ -374,6 +609,7 @@ const applyAction = (draft, action) => {
         if (draft.composerState.anonymousMode) {
             draft.composerState.aiDisclosure = "none";
             draft.composerState.aiDisclosureOpen = false;
+            draft.composerState.aiImageReshape = true;
         } else {
             draft.composerState.autoRotate = false;
             draft.composerState.aiImageReshape = false;
@@ -480,6 +716,113 @@ const applyAction = (draft, action) => {
         return;
     case "notification-center/set-tab":
         draft.overlayState.notificationCenter.tab = action.payload.tab;
+        return;
+    case "member-list/open":
+        draft.overlayState.memberList.open = true;
+        return;
+    case "member-list/close":
+        draft.overlayState.memberList.open = false;
+        return;
+    case "channel-settings/open":
+        draft.overlayState.channelSettings.open = true;
+        draft.overlayState.channelSettings.saveStatus = "idle";
+        draft.overlayState.channelSettings.error = null;
+        draft.overlayState.channelSettings.draftName = draft.runtimeState.channel?.name || "";
+        draft.overlayState.channelSettings.draftLogo = draft.runtimeState.channel?.logoUrl || "";
+        draft.overlayState.channelSettings.draftBackground = draft.runtimeState.channel?.backgroundUrl || "";
+        return;
+    case "channel-settings/close":
+        draft.overlayState.channelSettings.open = false;
+        draft.overlayState.channelSettings.saveStatus = "idle";
+        draft.overlayState.channelSettings.error = null;
+        draft.overlayState.channelSettings.draftName = draft.runtimeState.channel?.name || "";
+        draft.overlayState.channelSettings.draftLogo = draft.runtimeState.channel?.logoUrl || "";
+        draft.overlayState.channelSettings.draftBackground = draft.runtimeState.channel?.backgroundUrl || "";
+        return;
+    case "channel-settings/set-field":
+        Object.assign(draft.overlayState.channelSettings, action.payload);
+        return;
+    case "channel-settings/save-start":
+        draft.overlayState.channelSettings.saveStatus = "saving";
+        draft.overlayState.channelSettings.error = null;
+        return;
+    case "channel-settings/save-error":
+        draft.overlayState.channelSettings.saveStatus = "idle";
+        draft.overlayState.channelSettings.error = action.payload.error;
+        return;
+    case "channel-settings/save-finish":
+        draft.overlayState.channelSettings.saveStatus = "idle";
+        draft.overlayState.channelSettings.open = false;
+        draft.overlayState.channelSettings.error = null;
+        return;
+    case "channel-intelligence/open":
+        draft.overlayState.channelIntelligence.open = true;
+        draft.overlayState.channelIntelligence.draftTheme = draft.roundState.theme || "";
+        return;
+    case "channel-intelligence/close":
+        draft.overlayState.channelIntelligence.open = false;
+        draft.overlayState.channelIntelligence.godPickerOpen = false;
+        draft.overlayState.channelIntelligence.themeEditorOpen = false;
+        draft.overlayState.channelIntelligence.revealEditorOpen = false;
+        draft.overlayState.channelIntelligence.revealMemberPickerOpen = false;
+        draft.overlayState.channelIntelligence.revealAngelPickerOpen = false;
+        draft.overlayState.channelIntelligence.draftRevealMember = null;
+        draft.overlayState.channelIntelligence.draftRevealAngel = null;
+        draft.overlayState.channelIntelligence.draftTheme = draft.roundState.theme || "";
+        return;
+    case "channel-intelligence/set-field":
+        Object.assign(draft.overlayState.channelIntelligence, action.payload);
+        return;
+    case "image-lightbox/open":
+        draft.overlayState.imageLightbox.open = true;
+        draft.overlayState.imageLightbox.image = cloneSimple(action.payload.image);
+        draft.overlayState.imageLightbox.source = action.payload.source || "";
+        return;
+    case "image-lightbox/close":
+        draft.overlayState.imageLightbox.open = false;
+        draft.overlayState.imageLightbox.image = null;
+        draft.overlayState.imageLightbox.source = "";
+        return;
+    case "delete-confirm/open":
+        draft.overlayState.deleteConfirm.open = true;
+        draft.overlayState.deleteConfirm.targetType = action.payload.targetType;
+        draft.overlayState.deleteConfirm.targetId = action.payload.targetId;
+        draft.overlayState.deleteConfirm.postId = action.payload.postId || null;
+        draft.overlayState.deleteConfirm.title = action.payload.title || "";
+        draft.overlayState.deleteConfirm.message = action.payload.message || "";
+        draft.overlayState.deleteConfirm.scopeLabel = action.payload.scopeLabel || "";
+        draft.overlayState.deleteConfirm.submitStatus = "idle";
+        draft.overlayState.deleteConfirm.error = null;
+        return;
+    case "delete-confirm/close":
+        draft.overlayState.deleteConfirm.open = false;
+        draft.overlayState.deleteConfirm.targetType = "";
+        draft.overlayState.deleteConfirm.targetId = null;
+        draft.overlayState.deleteConfirm.postId = null;
+        draft.overlayState.deleteConfirm.title = "";
+        draft.overlayState.deleteConfirm.message = "";
+        draft.overlayState.deleteConfirm.scopeLabel = "";
+        draft.overlayState.deleteConfirm.submitStatus = "idle";
+        draft.overlayState.deleteConfirm.error = null;
+        return;
+    case "delete-confirm/submit-start":
+        draft.overlayState.deleteConfirm.submitStatus = "submitting";
+        draft.overlayState.deleteConfirm.error = null;
+        return;
+    case "delete-confirm/submit-error":
+        draft.overlayState.deleteConfirm.submitStatus = "idle";
+        draft.overlayState.deleteConfirm.error = action.payload.error;
+        return;
+    case "delete-confirm/submit-finish":
+        draft.overlayState.deleteConfirm.open = false;
+        draft.overlayState.deleteConfirm.targetType = "";
+        draft.overlayState.deleteConfirm.targetId = null;
+        draft.overlayState.deleteConfirm.postId = null;
+        draft.overlayState.deleteConfirm.title = "";
+        draft.overlayState.deleteConfirm.message = "";
+        draft.overlayState.deleteConfirm.scopeLabel = "";
+        draft.overlayState.deleteConfirm.submitStatus = "idle";
+        draft.overlayState.deleteConfirm.error = null;
         return;
     case "identity/open":
         draft.overlayState.identity.open = true;
